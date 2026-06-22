@@ -88,6 +88,7 @@ read_verilog -library xil_defaultlib {
   D:/dldproject/snake/rtl/clk_div.v
   D:/dldproject/snake/rtl/debounce.v
   D:/dldproject/snake/rtl/lfsr.v
+  D:/dldproject/snake/rtl/ps2_keyboard.v
   D:/dldproject/snake/rtl/seven_seg_display.v
   D:/dldproject/snake/rtl/snake_game.v
   D:/dldproject/snake/rtl/snake_render.v

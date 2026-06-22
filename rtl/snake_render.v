@@ -17,6 +17,8 @@ module snake_render (
     input  wire [1199:0] snake_grid_flat,  // 40x30 snake grid
     input  wire [5:0]  food_x,             // food X (0-39)
     input  wire [4:0]  food_y,             // food Y (0-29)
+    input  wire [5:0]  head_x,             // snake head X
+    input  wire [4:0]  head_y,             // snake head Y
     output reg  [3:0]  vga_r,              // VGA red
     output reg  [3:0]  vga_g,              // VGA green
     output reg  [3:0]  vga_b               // VGA blue
@@ -37,6 +39,7 @@ module snake_render (
     // Pixel classification (combinational, reads directly from game state)
     //----------------------------------------------------------------------
     wire is_snake     = idx_valid && snake_grid_flat[grid_idx];
+    wire is_head      = idx_valid && (cell_x == head_x) && (cell_y == head_y);
     wire is_food      = idx_valid && (cell_x == food_x) && (cell_y == food_y);
     wire is_border    = (pixel_x < 2) || (pixel_x >= 638) ||
                         (pixel_y < 2) || (pixel_y >= 478);
@@ -71,6 +74,13 @@ module snake_render (
                     {vga_r, vga_g, vga_b} <= {4'd15, 4'd0, 4'd0};
                 else
                     {vga_r, vga_g, vga_b} <= {4'd15, 4'd3, 4'd3};
+            end
+            else if (is_head) begin
+                // Snake head — blue
+                if (is_grid_line)
+                    {vga_r, vga_g, vga_b} <= {4'd0, 4'd4, 4'd15};
+                else
+                    {vga_r, vga_g, vga_b} <= {4'd4, 4'd8, 4'd15};
             end
             else if (is_snake) begin
                 if (is_grid_line)

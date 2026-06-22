@@ -2,12 +2,10 @@
 # Vivado v2020.2 (64-bit)
 # SW Build 3064766 on Wed Nov 18 09:12:45 MST 2020
 # IP Build 3064653 on Wed Nov 18 14:17:31 MST 2020
-# Start of session at: Mon Jun 22 16:29:49 2026
-# Process ID: 13156
+# Start of session at: Mon Jun 22 16:54:46 2026
+# Process ID: 13440
 # Current directory: D:/dldproject/snake/snake
-# Command line: vivado.exe -gui_launcher_event rodinguilauncherevent9040 D:\dldproject\snake\snake\snake.xpr
+# Command line: vivado.exe -gui_launcher_event rodinguilauncherevent28896 D:\dldproject\snake\snake\snake.xpr
 # Log file: D:/dldproject/snake/snake/vivado.log
 # Journal file: D:/dldproject/snake/snake\vivado.jou
 #-----------------------------------------------------------
-start_gui
-open_project D:/dldproject/snake/snake/snake.xpr
