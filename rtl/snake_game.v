@@ -20,7 +20,9 @@ module snake_game (
     output wire        game_over,          // game over flag
     output wire [1199:0] snake_grid_flat,  // snake body grid
     output wire [5:0]  food_x,             // food X position
-    output wire [4:0]  food_y              // food Y position
+    output wire [4:0]  food_y,             // food Y position
+    output wire [5:0]  head_x,             // snake head X (for colored head)
+    output wire [4:0]  head_y              // snake head Y
 );
 
     //----------------------------------------------------------------------
@@ -56,7 +58,7 @@ module snake_game (
     reg [1:0]  next_dir;
 
     // Head position
-    reg [5:0]  head_x, head_y;
+    reg [5:0]  head_x_reg, head_y_reg;
 
     // Food
     reg [5:0]  food_x_reg;
@@ -118,13 +120,16 @@ module snake_game (
             next_dir   <= DIR_RIGHT;
         end
         else if (state == S_PLAYING) begin
-            if (btn_up && direction != DIR_DOWN)
+            // 180° prevention: check against next_dir (queued), not direction (committed).
+            // This prevents rapid key sequences (e.g. DOWN then UP) from bypassing the check
+            // before the next game_tick commits the direction.
+            if (btn_up && next_dir != DIR_DOWN)
                 next_dir <= DIR_UP;
-            else if (btn_down && direction != DIR_UP)
+            else if (btn_down && next_dir != DIR_UP)
                 next_dir <= DIR_DOWN;
-            else if (btn_left && direction != DIR_RIGHT)
+            else if (btn_left && next_dir != DIR_RIGHT)
                 next_dir <= DIR_LEFT;
-            else if (btn_right && direction != DIR_LEFT)
+            else if (btn_right && next_dir != DIR_LEFT)
                 next_dir <= DIR_RIGHT;
         end
     end
@@ -136,13 +141,13 @@ module snake_game (
     reg [4:0] new_head_y;
 
     always @(*) begin
-        new_head_x = head_x;
-        new_head_y = head_y;
+        new_head_x = head_x_reg;
+        new_head_y = head_y_reg;
         case (next_dir)
-            DIR_UP:    new_head_y = head_y - 5'd1;
-            DIR_DOWN:  new_head_y = head_y + 5'd1;
-            DIR_LEFT:  new_head_x = head_x - 6'd1;
-            DIR_RIGHT: new_head_x = head_x + 6'd1;
+            DIR_UP:    new_head_y = head_y_reg - 5'd1;
+            DIR_DOWN:  new_head_y = head_y_reg + 5'd1;
+            DIR_LEFT:  new_head_x = head_x_reg - 6'd1;
+            DIR_RIGHT: new_head_x = head_x_reg + 6'd1;
             default:   ;
         endcase
     end
@@ -190,8 +195,8 @@ module snake_game (
             head_idx  <= 8'd3;
             tail_idx  <= 8'd0;
             snake_len <= 8'd3;
-            head_x    <= 6'd20;
-            head_y    <= 5'd15;
+            head_x_reg    <= 6'd20;
+            head_y_reg    <= 5'd15;
         end
         // Entering playing state: reset snake body
         else if ((state == S_DEAD && next_state == S_PLAYING) ||
@@ -210,8 +215,8 @@ module snake_game (
             head_idx  <= 8'd3;
             tail_idx  <= 8'd0;
             snake_len <= 8'd3;
-            head_x    <= 6'd20;
-            head_y    <= 5'd15;
+            head_x_reg    <= 6'd20;
+            head_y_reg    <= 5'd15;
         end
         // Normal movement — block if collision would occur THIS tick
         else if (state == S_PLAYING && game_tick && !wall_collision && !self_collision) begin
@@ -223,8 +228,8 @@ module snake_game (
             snake_x[head_idx] <= new_head_x;
             snake_y[head_idx] <= new_head_y;
             head_idx <= head_idx + 8'd1;
-            head_x   <= new_head_x;
-            head_y   <= new_head_y;
+            head_x_reg   <= new_head_x;
+            head_y_reg   <= new_head_y;
 
             if (food_eaten && snake_len < MAX_LEN) begin
                 snake_len <= snake_len + 8'd1;
@@ -303,5 +308,7 @@ module snake_game (
     assign snake_grid_flat = grid_reg;
     assign food_x          = food_x_reg;
     assign food_y          = food_y_reg;
+    assign head_x          = head_x_reg;
+    assign head_y          = head_y_reg;
 
 endmodule

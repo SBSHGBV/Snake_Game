@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<GenRun Id="synth_1" LaunchPart="xc7k160tffg676-1" LaunchTime="1782114219">
+<GenRun Id="synth_1" LaunchPart="xc7k160tffg676-1" LaunchTime="1782118517">
   <File Type="PA-TCL" Name="snake_top.tcl"/>
   <File Type="RDS-PROPCONSTRS" Name="snake_top_drc_synth.rpt"/>
   <File Type="REPORTS-TCL" Name="snake_top_reports.tcl"/>
@@ -26,6 +26,13 @@
       </FileInfo>
     </File>
     <File Path="$PPRDIR/../rtl/lfsr.v">
+      <FileInfo>
+        <Attr Name="UsedIn" Val="synthesis"/>
+        <Attr Name="UsedIn" Val="implementation"/>
+        <Attr Name="UsedIn" Val="simulation"/>
+      </FileInfo>
+    </File>
+    <File Path="$PPRDIR/../rtl/ps2_keyboard.v">
       <FileInfo>
         <Attr Name="UsedIn" Val="synthesis"/>
         <Attr Name="UsedIn" Val="implementation"/>

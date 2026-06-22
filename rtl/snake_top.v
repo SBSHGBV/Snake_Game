@@ -105,6 +105,8 @@ module snake_top (
     wire [1199:0] snake_grid_flat;
     wire [5:0]    food_x;
     wire [4:0]    food_y;
+    wire [5:0]    head_x;
+    wire [4:0]    head_y;
 
     snake_game u_game (
         .clk             (clk),
@@ -120,7 +122,9 @@ module snake_top (
         .game_over       (game_over),
         .snake_grid_flat (snake_grid_flat),
         .food_x          (food_x),
-        .food_y          (food_y)
+        .food_y          (food_y),
+        .head_x          (head_x),
+        .head_y          (head_y)
     );
 
     //----------------------------------------------------------------------
@@ -154,6 +158,8 @@ module snake_top (
         .snake_grid_flat (snake_grid_flat),
         .food_x          (food_x),
         .food_y          (food_y),
+        .head_x          (head_x),
+        .head_y          (head_y),
         .vga_r           (r),
         .vga_g           (g),
         .vga_b           (b)
