@@ -1,0 +1,23 @@
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/dldproject/snake/rtl/clk_div.v" into library xil_defaultlib
+INFO: [VRFC 10-311] analyzing module clk_div
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/dldproject/snake/rtl/debounce.v" into library xil_defaultlib
+INFO: [VRFC 10-311] analyzing module debounce
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/dldproject/snake/rtl/lfsr.v" into library xil_defaultlib
+INFO: [VRFC 10-311] analyzing module lfsr
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/dldproject/snake/rtl/seven_seg_display.v" into library xil_defaultlib
+INFO: [VRFC 10-311] analyzing module seven_seg_display
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/dldproject/snake/rtl/snake_game.v" into library xil_defaultlib
+INFO: [VRFC 10-311] analyzing module snake_game
+WARNING: [VRFC 10-986] literal value truncated to fit in 25 bits [D:/dldproject/snake/rtl/snake_game.v:105]
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/dldproject/snake/rtl/snake_render.v" into library xil_defaultlib
+INFO: [VRFC 10-311] analyzing module snake_render
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/dldproject/snake/rtl/snake_top.v" into library xil_defaultlib
+INFO: [VRFC 10-311] analyzing module snake_top
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/dldproject/snake/rtl/vga_controller.v" into library xil_defaultlib
+INFO: [VRFC 10-311] analyzing module vga_controller
+INFO: [VRFC 10-2263] Analyzing Verilog file "D:/dldproject/snake/sim/snake_tb.v" into library xil_defaultlib
+INFO: [VRFC 10-311] analyzing module snake_tb
+WARNING: [VRFC 10-2659] decimal constant 6000000000 is too large, should be smaller than 2147483648; using 1705032704 instead [D:/dldproject/snake/sim/snake_tb.v:104]
+WARNING: [VRFC 10-2581] 4000000000 as 32-bit signed integer overflows, using -294967296 instead [D:/dldproject/snake/sim/snake_tb.v:109]
+ERROR: [VRFC 10-3734] system call 'isunknown' not allowed in this dialect. Use SystemVerilog mode [D:/dldproject/snake/sim/snake_tb.v:153]
+ERROR: [VRFC 10-2865] module 'snake_tb' ignored due to previous errors [D:/dldproject/snake/sim/snake_tb.v:8]

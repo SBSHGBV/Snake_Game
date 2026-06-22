@@ -1,0 +1,17 @@
+# compile verilog/system verilog design source files
+verilog xil_defaultlib  \
+"../../../../../rtl/clk_div.v" \
+"../../../../../rtl/debounce.v" \
+"../../../../../rtl/lfsr.v" \
+"../../../../../rtl/seven_seg_display.v" \
+"../../../../../rtl/snake_game.v" \
+"../../../../../rtl/snake_render.v" \
+"../../../../../rtl/snake_top.v" \
+"../../../../../rtl/vga_controller.v" \
+"../../../../../sim/snake_tb.v" \
+
+# compile glbl module
+verilog xil_defaultlib "glbl.v"
+
+# Do not sort compile order
+nosort
