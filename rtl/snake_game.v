@@ -45,13 +45,13 @@ module snake_game (
 
     // Constants (parameters for sim override)
     parameter MAX_LEN   = 256;
-    parameter DEAD_TIME = 25'd199_999_999;  // ~2 sec at 100MHz
+    parameter DEAD_TIME = 28'd199_999_999;  // ~2 sec at 100MHz
 
     //----------------------------------------------------------------------
     // Registers
     //----------------------------------------------------------------------
     reg [1:0]  state, next_state;
-    reg [24:0] dead_timer;
+    reg [27:0] dead_timer;
 
     // Snake body FIFO
     reg [5:0]  snake_x [0:MAX_LEN-1];
@@ -98,7 +98,7 @@ module snake_game (
         case (state)
             S_MENU:    if (btn_start)                         next_state = S_PLAYING;
             S_PLAYING: if (collision_flag)                     next_state = S_DEAD;
-            S_DEAD:    if (dead_timer == 25'd0 || btn_start)  next_state = S_MENU;
+            S_DEAD:    if (dead_timer == 28'd0 || btn_start)  next_state = S_MENU;
             default:                                          next_state = S_MENU;
         endcase
     end
@@ -111,7 +111,7 @@ module snake_game (
             dead_timer <= DEAD_TIME;
         else if (state == S_DEAD) begin
             if (dead_timer > 0)
-                dead_timer <= dead_timer - 25'd1;
+                dead_timer <= dead_timer - 28'd1;
         end else
             dead_timer <= DEAD_TIME;
     end
@@ -262,7 +262,7 @@ module snake_game (
             head_x_reg    <= 6'd20;
             head_y_reg    <= 5'd15;
         end
-        // Normal movement — block if collision would occur THIS tick
+        // Normal movement: block if collision would occur THIS tick
         else if (move_tick && !wall_collision && !self_collision) begin
             // Add new head
             grid_reg[new_head_y * 40 + new_head_x] <= 1'b1;
@@ -286,8 +286,10 @@ module snake_game (
     // Food position (with collision avoidance)
     //----------------------------------------------------------------------
     // Candidate position from LFSR (updates every cycle)
-    wire [5:0] cand_food_x = {1'b0, lfsr_val[5:0]}  % 6'd40;
-    wire [4:0] cand_food_y = lfsr_val[10:6] % 5'd30;
+    wire [5:0] raw_food_x = lfsr_val[5:0];
+    wire [4:0] raw_food_y = lfsr_val[10:6];
+    wire [5:0] cand_food_x = (raw_food_x < 6'd40) ? raw_food_x : (raw_food_x - 6'd40);
+    wire [4:0] cand_food_y = (raw_food_y < 5'd30) ? raw_food_y : (raw_food_y - 5'd30);
     wire       cand_blocked = grid_reg[cand_food_y * 40 + cand_food_x];
 
     always @(posedge clk or posedge rst) begin

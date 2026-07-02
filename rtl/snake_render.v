@@ -1,7 +1,7 @@
 //============================================================================
 // snake_render.v - Snake Game VGA Renderer
 //   40x30 grid, 16x16 pixels per cell = 640x480
-//   Direct combinational read from game state — no double-buffer needed
+//   Direct combinational read from game state; no double-buffer needed
 //   because game grid only changes at 5Hz (200ms intervals).
 //============================================================================
 `timescale 1ns / 1ps
@@ -140,6 +140,19 @@ module snake_render (
         end
     endfunction
 
+    function [7:0] bcd_digit_char;
+        input [1:0] idx;
+        input [15:0] val;
+        begin
+            case (idx)
+                2'd0: bcd_digit_char = 8'd48 + val[15:12];
+                2'd1: bcd_digit_char = 8'd48 + val[11:8];
+                2'd2: bcd_digit_char = 8'd48 + val[7:4];
+                default: bcd_digit_char = 8'd48 + val[3:0];
+            endcase
+        end
+    endfunction
+
     function [7:0] diff_char;
         input [1:0] diff;
         input [2:0] idx;
@@ -189,24 +202,24 @@ module snake_render (
         (difficulty == 2'd1) ? high_score_normal :
                                high_score_hard;
 
-    // Title: SNAKE! at 5x scale, 6 chars x 6 columns.
-    wire title_area = (pixel_x >= 10'd140) && (pixel_x < 10'd500) &&
-                      (pixel_y >= 10'd72)  && (pixel_y < 10'd142);
-    wire [9:0] title_lx = pixel_x - 10'd140;
+    // Title: SNAKE! on a 64x64 cell grid.
+    wire title_area = (pixel_x >= 10'd128) && (pixel_x < 10'd512) &&
+                      (pixel_y >= 10'd72)  && (pixel_y < 10'd128);
+    wire [9:0] title_lx = pixel_x - 10'd128;
     wire [9:0] title_ly = pixel_y - 10'd72;
-    wire [2:0] title_col = title_lx / 10'd60;
-    wire [5:0] title_in_char_x = (title_lx % 10'd60) / 10'd10;
-    wire [2:0] title_font_y = title_ly / 10'd10;
+    wire [2:0] title_col = title_lx[8:6];
+    wire [5:0] title_in_char_x = {3'd0, title_lx[5:3]};
+    wire [2:0] title_font_y = title_ly[5:3];
     wire title_pixel = title_area && font_pixel(title_char(title_col), title_font_y, title_in_char_x[2:0]);
 
     // Menu difficulty line.
-    wire diff_area = (pixel_x >= 10'd224) && (pixel_x < 10'd416) &&
+    wire diff_area = (pixel_x >= 10'd256) && (pixel_x < 10'd384) &&
                      (pixel_y >= 10'd206) && (pixel_y < 10'd234);
-    wire [8:0] diff_lx = pixel_x - 10'd224;
+    wire [8:0] diff_lx = pixel_x - 10'd256;
     wire [7:0] diff_ly = pixel_y - 10'd206;
-    wire [2:0] diff_col = diff_lx / 9'd48;
-    wire [5:0] diff_in_char_x = (diff_lx % 9'd48) / 9'd8;
-    wire [2:0] diff_font_y = diff_ly / 8'd4;
+    wire [2:0] diff_col = {1'b0, diff_lx[6:5]};
+    wire [5:0] diff_in_char_x = {3'd0, diff_lx[4:2]};
+    wire [2:0] diff_font_y = diff_ly[4:2];
     wire diff_pixel = diff_area && font_pixel(diff_char(difficulty, diff_col), diff_font_y, diff_in_char_x[2:0]);
     wire selector_pixel = menu_active &&
                           (((pixel_x >= 10'd180) && (pixel_x < 10'd210)) ||
@@ -216,42 +229,42 @@ module snake_render (
                            ((pixel_x[3:0] > 4'd5) && (pixel_x[3:0] < 4'd10)));
 
     // Selected high score line: SCOREdddd.
-    wire high_area = (pixel_x >= 10'd188) && (pixel_x < 10'd452) &&
+    wire high_area = (pixel_x >= 10'd176) && (pixel_x < 10'd464) &&
                      (pixel_y >= 10'd268) && (pixel_y < 10'd296);
-    wire [8:0] high_lx = pixel_x - 10'd188;
+    wire [8:0] high_lx = pixel_x - 10'd176;
     wire [7:0] high_ly = pixel_y - 10'd268;
-    wire [3:0] high_col = high_lx / 9'd32;
-    wire [5:0] high_in_char_x = (high_lx % 9'd32) / 9'd5;
-    wire [2:0] high_font_y = high_ly / 8'd4;
+    wire [3:0] high_col = high_lx[8:5];
+    wire [5:0] high_in_char_x = {3'd0, high_lx[4:2]};
+    wire [2:0] high_font_y = high_ly[4:2];
     wire high_pixel = high_area && font_pixel(score_char(high_col, selected_high), high_font_y, high_in_char_x[2:0]);
 
     // Per-difficulty history rows.
-    wire history_area = (pixel_x >= 10'd130) && (pixel_x < 10'd538) &&
-                        (pixel_y >= 10'd322) && (pixel_y < 10'd406);
-    wire [9:0] hist_lx = pixel_x - 10'd130;
-    wire [8:0] hist_ly = pixel_y - 10'd322;
-    wire [1:0] hist_row = hist_ly / 9'd28;
-    wire [3:0] hist_col = hist_lx / 10'd24;
-    wire [5:0] hist_in_char_x = (hist_lx % 10'd24) / 10'd4;
-    wire [2:0] hist_font_y = (hist_ly % 9'd28) / 9'd4;
+    wire history_area = (pixel_x >= 10'd96) && (pixel_x < 10'd544) &&
+                        (pixel_y >= 10'd320) && (pixel_y < 10'd416);
+    wire [9:0] hist_lx = pixel_x - 10'd96;
+    wire [8:0] hist_ly = pixel_y - 10'd320;
+    wire [1:0] hist_row = hist_ly[6:5];
+    wire [3:0] hist_col = hist_lx[8:5];
+    wire [5:0] hist_in_char_x = {3'd0, hist_lx[4:2]};
+    wire [2:0] hist_font_y = hist_ly[4:2];
     wire [15:0] hist_score = (hist_row == 2'd0) ? high_score_easy :
                               (hist_row == 2'd1) ? high_score_normal :
                                                     high_score_hard;
-    wire [3:0] hist_score_col = hist_col - 4'd11;
+    wire [3:0] hist_score_col = hist_col - 4'd7;
     wire [7:0] hist_ch = (hist_col < 4'd4) ? diff_char(hist_row[1:0], hist_col[2:0]) :
-                         (hist_col >= 4'd11) ? score_char(hist_score_col, hist_score) :
+                         ((hist_col >= 4'd7) && (hist_col < 4'd11)) ? bcd_digit_char(hist_score_col[1:0], hist_score) :
                                                 " ";
     wire history_pixel = history_area && (hist_row < 2'd3) &&
                          font_pixel(hist_ch, hist_font_y, hist_in_char_x[2:0]);
 
     // Start hint.
-    wire start_area = (pixel_x >= 10'd260) && (pixel_x < 10'd380) &&
+    wire start_area = (pixel_x >= 10'd240) && (pixel_x < 10'd400) &&
                       (pixel_y >= 10'd430) && (pixel_y < 10'd458);
-    wire [8:0] start_lx = pixel_x - 10'd260;
+    wire [8:0] start_lx = pixel_x - 10'd240;
     wire [7:0] start_ly = pixel_y - 10'd430;
-    wire [2:0] start_col = start_lx / 9'd24;
-    wire [5:0] start_in_char_x = (start_lx % 9'd24) / 9'd4;
-    wire [2:0] start_font_y = start_ly / 8'd4;
+    wire [2:0] start_col = start_lx[7:5];
+    wire [5:0] start_in_char_x = {3'd0, start_lx[4:2]};
+    wire [2:0] start_font_y = start_ly[4:2];
     wire start_blink = anim_cnt[24];
     wire start_pixel = start_area && start_blink &&
                        font_pixel(start_char(start_col), start_font_y, start_in_char_x[2:0]);
@@ -280,9 +293,9 @@ module snake_render (
                            (pixel_y >= 10'd8) && (pixel_y < 10'd24);
     wire [7:0] game_score_lx = pixel_x - 10'd8;
     wire [4:0] game_score_ly = pixel_y - 10'd8;
-    wire [3:0] game_score_col = game_score_lx / 8'd16;
-    wire [5:0] game_score_in_char_x = (game_score_lx % 8'd16) / 8'd2;
-    wire [2:0] game_score_font_y = game_score_ly / 5'd2;
+    wire [3:0] game_score_col = game_score_lx[7:4];
+    wire [5:0] game_score_in_char_x = {3'd0, game_score_lx[3:1]};
+    wire [2:0] game_score_font_y = game_score_ly[3:1];
     wire game_score_pixel = game_score_area &&
                             font_pixel(score_char(game_score_col, score), game_score_font_y, game_score_in_char_x[2:0]);
 
@@ -338,7 +351,7 @@ module snake_render (
                     {vga_r, vga_g, vga_b} <= {4'd15, 4'd3, 4'd3};
             end
             else if (is_head) begin
-                // Snake head — blue
+                // Snake head: blue
                 if (is_grid_line)
                     {vga_r, vga_g, vga_b} <= {4'd0, 4'd4, 4'd15};
                 else

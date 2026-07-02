@@ -47,84 +47,70 @@ module ps2_keyboard (
     wire clk_fall = clk_prev && !ps2_clk_s;   // falling edge
 
     //----------------------------------------------------------------------
-    // Frame receive state machine (11 bits per frame)
+    // Frame receiver: start, 8 data bits LSB-first, parity, stop.
     //----------------------------------------------------------------------
-    reg [3:0]  bit_cnt;        // 0..10
-    reg [10:0] shift_reg;      // [10]=stop, [9]=parity, [8:1]=data, [0]=start
-    reg        receiving;
+    reg [3:0] bit_cnt;        // 0..7=data, 8=parity, 9=stop
+    reg [7:0] data_shift;
+    reg       parity_bit;
+    reg       receiving;
+    reg       frame_ready;
+    reg [7:0] scan_code;
 
     always @(posedge clk or posedge rst) begin
         if (rst) begin
-            bit_cnt   <= 4'd0;
-            shift_reg <= 11'd0;
-            receiving <= 1'b0;
-        end
-        else if (clk_fall) begin
-            if (!receiving) begin
-                // Wait for start bit (data low)
-                if (ps2_dat_s == 1'b0) begin
-                    receiving <= 1'b1;
-                    bit_cnt   <= 4'd1;
-                    shift_reg <= {10'd0, ps2_dat_s};  // shift_reg[0] = 0 (start)
-                end
-            end
-            else if (bit_cnt < 4'd10) begin
-                bit_cnt   <= bit_cnt + 4'd1;
-                shift_reg <= {ps2_dat_s, shift_reg[10:1]};
-            end
-            else begin
-                // bit_cnt == 10: last bit (stop bit)
-                receiving <= 1'b0;
-                bit_cnt   <= 4'd0;
-                shift_reg <= {ps2_dat_s, shift_reg[10:1]};
-            end
-        end
-    end
-
-    //----------------------------------------------------------------------
-    // Frame complete detection + scan code extraction
-    //----------------------------------------------------------------------
-    reg frame_ready;
-    reg [7:0] scan_code;
-
-    // Odd parity check
-    wire parity_ok = (^shift_reg[8:1]) ^ shift_reg[9];  // should be 1 (odd)
-    wire frame_valid = !shift_reg[0] && shift_reg[10] && parity_ok;  // start=0, stop=1, parity ok
-
-    always @(posedge clk) begin
-        if (rst) begin
+            bit_cnt     <= 4'd0;
+            data_shift  <= 8'd0;
+            parity_bit  <= 1'b0;
+            receiving   <= 1'b0;
             frame_ready <= 1'b0;
             scan_code   <= 8'd0;
         end
-        else if (!receiving && bit_cnt == 4'd0 && clk_fall) begin
-            // Frame just completed, check validity
-            if (frame_valid) begin
-                frame_ready <= 1'b1;
-                scan_code   <= shift_reg[8:1];
-            end
-            else begin
-                frame_ready <= 1'b0;
-            end
-        end
         else begin
             frame_ready <= 1'b0;
+
+            if (clk_fall) begin
+                if (!receiving) begin
+                    // Start bit is low.
+                    if (ps2_dat_s == 1'b0) begin
+                        receiving  <= 1'b1;
+                        bit_cnt    <= 4'd0;
+                        data_shift <= 8'd0;
+                        parity_bit <= 1'b0;
+                    end
+                end
+                else if (bit_cnt < 4'd8) begin
+                    data_shift[bit_cnt] <= ps2_dat_s;
+                    bit_cnt <= bit_cnt + 4'd1;
+                end
+                else if (bit_cnt == 4'd8) begin
+                    parity_bit <= ps2_dat_s;
+                    bit_cnt <= 4'd9;
+                end
+                else begin
+                    // Stop bit is high, and data plus parity must be odd.
+                    receiving <= 1'b0;
+                    bit_cnt <= 4'd0;
+                    if (ps2_dat_s && ((^data_shift) ^ parity_bit)) begin
+                        scan_code <= data_shift;
+                        frame_ready <= 1'b1;
+                    end
+                end
+            end
         end
     end
 
     //----------------------------------------------------------------------
     // Extended key state machine
-    //   E0 prefix → next byte is extended scan code
-    //   F0 prefix → next byte is break code (key released)
+    //   E0 prefix: next byte is extended scan code
+    //   F0 prefix: next byte is break code (key released)
     //----------------------------------------------------------------------
     reg        e0_flag;       // last byte was E0
     reg        f0_flag;       // last byte was F0
-    reg [7:0]  last_scan;     // last make scan code
 
     always @(posedge clk or posedge rst) begin
         if (rst) begin
             e0_flag   <= 1'b0;
             f0_flag   <= 1'b0;
-            last_scan <= 8'd0;
         end
         else if (frame_ready) begin
             if (scan_code == 8'hE0) begin
@@ -136,23 +122,16 @@ module ps2_keyboard (
                 f0_flag <= 1'b1;
             end
             else begin
-                // Regular scan code — interpret based on flags
-                if (!f0_flag) begin
-                    // Make code (key pressed)
-                    last_scan <= e0_flag ? {1'b1, scan_code[6:0]} : scan_code;
-                end
                 e0_flag <= 1'b0;
                 f0_flag <= 1'b0;
             end
         end
     end
 
-    // Extended code marker: store as 8'h8x (set bit 7)
-    wire [7:0] extended_code = {1'b1, scan_code[6:0]};
     wire make_code_valid = frame_ready && !f0_flag && scan_code != 8'hE0 && scan_code != 8'hF0;
 
     //----------------------------------------------------------------------
-    // Key mapping → single-cycle pulses
+    // Key mapping to single-cycle pulses
     //----------------------------------------------------------------------
     always @(posedge clk or posedge rst) begin
         if (rst) begin

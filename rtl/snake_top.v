@@ -1,6 +1,6 @@
 //============================================================================
 // snake_top.v - Snake Game Top-Level Module (Kintex-7)
-//   Auto-starts on power-up. BTNX4 restarts.
+//   Reset opens the start menu. BTNX4 starts or restarts.
 //   Control: BTN[3:0] buttons + PS/2 keyboard (arrow keys / WASD)
 //============================================================================
 `timescale 1ns / 1ps
@@ -30,7 +30,7 @@ module snake_top (
             por_cnt <= por_cnt + 8'd1;
     end
 
-    wire rst_ext = ~rstn;                 // external reset button (active low→high)
+    wire rst_ext = ~rstn;                 // external reset button (active low to high)
     wire rst = por_rst || rst_ext;        // combined reset
 
     //----------------------------------------------------------------------
@@ -49,7 +49,7 @@ module snake_top (
     );
 
     //----------------------------------------------------------------------
-    // Button debouncing — K7 buttons are active-low, invert to active-high
+    // Button debouncing: K7 buttons are active-low, invert to active-high
     //----------------------------------------------------------------------
     wire btn_up, btn_down, btn_left, btn_right, btn_start;
     wire nc_rel;
@@ -98,7 +98,7 @@ module snake_top (
     );
 
     //----------------------------------------------------------------------
-    // Snake game core — reset enters the start menu
+    // Snake game core: reset enters the start menu
     //----------------------------------------------------------------------
     wire [15:0]   score;
     wire          game_over;
