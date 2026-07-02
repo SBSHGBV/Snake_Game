@@ -217,6 +217,21 @@ module snake_tb;
             $display("[%0t] ERROR: confirmed restart did not reset into gameplay", $time);
             $finish;
         end
+
+        $display("[%0t] Pressing BTNX4 to open restart confirmation...", $time);
+        start_press();
+        #1_000;
+        if (u_dut.confirm_active !== 1'b1 || u_dut.confirm_select !== 1'b0) begin
+            $display("[%0t] ERROR: BTNX4 did not open restart confirmation on CANCEL", $time);
+            $finish;
+        end
+        $display("[%0t] Pressing BTNX4 to cancel restart...", $time);
+        start_press();
+        #1_000;
+        if (u_dut.confirm_active !== 1'b0 || u_dut.menu_active !== 1'b0) begin
+            $display("[%0t] ERROR: BTNX4 restart cancel did not return to game", $time);
+            $finish;
+        end
         release u_dut.game_tick;
 
         // Test 1: Press DOWN

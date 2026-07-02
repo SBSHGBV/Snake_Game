@@ -330,6 +330,11 @@ module snake_game (
             food_y_reg  <= 5'd10;
             food_valid  <= 1'b0;
         end
+        else if (confirm_restart) begin
+            food_x_reg  <= 6'd10;
+            food_y_reg  <= 5'd10;
+            food_valid  <= 1'b0;
+        end
         else if (state == S_PLAYING) begin
             // Invalidate food when eaten or on manual restart
             if (food_eaten)

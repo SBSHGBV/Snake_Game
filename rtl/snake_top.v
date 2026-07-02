@@ -1,6 +1,6 @@
 //============================================================================
 // snake_top.v - Snake Game Top-Level Module (Kintex-7)
-//   Reset opens the start menu. R opens restart confirmation while playing.
+//   Reset opens the start menu. R/BTNX4 opens restart confirmation while playing.
 //   Control: BTN[3:0] buttons + PS/2 keyboard (arrow keys / WASD)
 //============================================================================
 `timescale 1ns / 1ps
@@ -9,7 +9,7 @@ module snake_top (
     input  wire        clk,
     input  wire        rstn,         // external reset (active low, with PULLUP)
     input  wire [3:0]  BTN,          // direction: up/down/left/right
-    input  wire        BTNX4,        // start / restart
+    input  wire        BTNX4,        // start / confirm / restart request
     input  wire        ps2_clk,      // PS/2 keyboard clock
     input  wire        ps2_data,     // PS/2 keyboard data
     output wire [3:0]  r, g, b,      // VGA 4:4:4
@@ -84,7 +84,7 @@ module snake_top (
     wire dir_left  = btn_left  || kb_left;
     wire dir_right = btn_right || kb_right;
     wire start_sig = btn_start || kb_start;
-    wire restart_sig = kb_restart;
+    wire restart_sig;
 
     //----------------------------------------------------------------------
     // LFSR
@@ -116,6 +116,8 @@ module snake_top (
     wire [4:0]    food_y;
     wire [5:0]    head_x;
     wire [4:0]    head_y;
+
+    assign restart_sig = kb_restart || (btn_start && !menu_active && !confirm_active);
 
     snake_game u_game (
         .clk             (clk),
