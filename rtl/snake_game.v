@@ -15,10 +15,13 @@ module snake_game (
     input  wire        btn_left,           // direction: left
     input  wire        btn_right,          // direction: right
     input  wire        btn_start,          // start/restart (debounced press)
+    input  wire        btn_restart,        // request restart confirmation
     input  wire [15:0] lfsr_val,           // LFSR random value snapshot
     output wire [15:0] score,              // BCD score (4 digits)
     output wire        game_over,          // game over flag
     output wire        menu_active,        // start menu flag
+    output wire        confirm_active,     // restart confirm menu flag
+    output wire        confirm_select,     // 0=cancel, 1=confirm
     output wire [1:0]  difficulty,         // 0=easy, 1=normal, 2=hard
     output wire [15:0] high_score_easy,    // BCD high score per difficulty
     output wire [15:0] high_score_normal,
@@ -36,6 +39,7 @@ module snake_game (
     localparam S_MENU    = 2'd0;
     localparam S_PLAYING = 2'd1;
     localparam S_DEAD    = 2'd2;
+    localparam S_CONFIRM = 2'd3;
 
     // Direction
     localparam DIR_UP    = 2'd0;
@@ -62,6 +66,7 @@ module snake_game (
     reg [1:0]  next_dir;
     reg [1:0]  difficulty_reg;
     reg [2:0]  move_div_cnt;
+    reg        confirm_select_reg;
 
     // Head position
     reg [5:0]  head_x_reg, head_y_reg;
@@ -98,10 +103,14 @@ module snake_game (
         case (state)
             S_MENU:    if (btn_start)                         next_state = S_PLAYING;
             S_PLAYING: if (collision_flag)                     next_state = S_DEAD;
+                       else if (btn_restart)                  next_state = S_CONFIRM;
             S_DEAD:    if (dead_timer == 28'd0 || btn_start)  next_state = S_MENU;
+            S_CONFIRM: if (btn_start || btn_restart)          next_state = S_PLAYING;
             default:                                          next_state = S_MENU;
         endcase
     end
+
+    wire confirm_restart = (state == S_CONFIRM) && (btn_start || btn_restart) && confirm_select_reg;
 
     //----------------------------------------------------------------------
     // Dead timer
@@ -123,10 +132,12 @@ module snake_game (
         if (rst) begin
             next_dir   <= DIR_RIGHT;
         end
-        else if (state != S_PLAYING)
+        else if (confirm_restart)
+            next_dir <= DIR_RIGHT;
+        else if (state == S_MENU || state == S_DEAD)
             next_dir <= DIR_RIGHT;
         else if (state == S_PLAYING) begin
-            // 180° prevention: check against next_dir (queued), not direction (committed).
+            // 180 degree prevention: check against next_dir (queued), not direction (committed).
             // This prevents rapid key sequences (e.g. DOWN then UP) from bypassing the check
             // before the next game_tick commits the direction.
             if (btn_up && next_dir != DIR_DOWN)
@@ -138,6 +149,24 @@ module snake_game (
             else if (btn_right && next_dir != DIR_LEFT)
                 next_dir <= DIR_RIGHT;
         end
+    end
+
+    //----------------------------------------------------------------------
+    // Restart confirmation menu selection
+    //----------------------------------------------------------------------
+    always @(posedge clk or posedge rst) begin
+        if (rst)
+            confirm_select_reg <= 1'b0;  // cancel
+        else if (state == S_PLAYING && btn_restart)
+            confirm_select_reg <= 1'b0;  // open safely on cancel
+        else if (state == S_CONFIRM) begin
+            if (btn_left || btn_up)
+                confirm_select_reg <= 1'b0;
+            else if (btn_right || btn_down)
+                confirm_select_reg <= 1'b1;
+        end
+        else if (state != S_CONFIRM)
+            confirm_select_reg <= 1'b0;
     end
 
     //----------------------------------------------------------------------
@@ -215,6 +244,8 @@ module snake_game (
 
     assign game_over = (state == S_DEAD);
     assign menu_active = (state == S_MENU);
+    assign confirm_active = (state == S_CONFIRM);
+    assign confirm_select = confirm_select_reg;
 
     // Food eaten check (only when food is validly placed)
     wire food_eaten = food_valid && move_tick && will_grow;
@@ -244,7 +275,7 @@ module snake_game (
             head_y_reg    <= 5'd15;
         end
         // Entering playing state: reset snake body
-        else if (state == S_MENU && next_state == S_PLAYING) begin
+        else if ((state == S_MENU && next_state == S_PLAYING) || confirm_restart) begin
             for (i = 0; i < 1200; i = i + 1)
                 grid_reg[i] <= 1'b0;
 
@@ -276,7 +307,8 @@ module snake_game (
                 snake_len <= snake_len + 9'd1;
             end else begin
                 // Remove tail
-                grid_reg[snake_y[tail_idx] * 40 + snake_x[tail_idx]] <= 1'b0;
+                if (!moving_into_tail)
+                    grid_reg[snake_y[tail_idx] * 40 + snake_x[tail_idx]] <= 1'b0;
                 tail_idx <= tail_idx + 8'd1;
             end
         end
@@ -313,7 +345,7 @@ module snake_game (
                 // else: stay invalid, LFSR gives new candidate next cycle
             end
         end
-        else begin
+        else if (state != S_CONFIRM) begin
             // S_DEAD: invalidate food so restart generates fresh one
             food_valid <= 1'b0;
         end
@@ -325,7 +357,7 @@ module snake_game (
     always @(posedge clk or posedge rst) begin
         if (rst)
             score_reg <= 16'd0;
-        else if (state == S_MENU && next_state == S_PLAYING)
+        else if ((state == S_MENU && next_state == S_PLAYING) || confirm_restart)
             score_reg <= 16'd0;
         else if (state == S_PLAYING && food_eaten && score_reg != 16'h9999) begin
             if (score_reg[3:0] == 4'd9) begin

@@ -15,6 +15,8 @@ module snake_render (
     input  wire [9:0]  pixel_y,            // VGA pixel Y (0-479)
     input  wire        game_over,          // game over flag
     input  wire        menu_active,        // start menu flag
+    input  wire        confirm_active,     // restart confirmation flag
+    input  wire        confirm_select,     // 0=cancel, 1=confirm
     input  wire [1:0]  difficulty,         // selected difficulty
     input  wire [15:0] score,              // BCD score
     input  wire [15:0] high_score_easy,    // high scores per difficulty
@@ -62,9 +64,6 @@ module snake_render (
             anim_cnt <= anim_cnt + 26'd1;
     end
 
-    wire [1:0] orbit_phase = anim_cnt[25:24];
-    wire [3:0] anim_step = anim_cnt[25:22];
-
     //----------------------------------------------------------------------
     // Tiny 5x7 bitmap font helpers
     //----------------------------------------------------------------------
@@ -87,6 +86,7 @@ module snake_render (
                 "C": case (row) 3'd0: font5x7 = 5'b01111; 3'd1: font5x7 = 5'b10000; 3'd2: font5x7 = 5'b10000; 3'd3: font5x7 = 5'b10000; 3'd4: font5x7 = 5'b10000; 3'd5: font5x7 = 5'b10000; 3'd6: font5x7 = 5'b01111; default: font5x7 = 5'b00000; endcase
                 "D": case (row) 3'd0: font5x7 = 5'b11110; 3'd1: font5x7 = 5'b10001; 3'd2: font5x7 = 5'b10001; 3'd3: font5x7 = 5'b10001; 3'd4: font5x7 = 5'b10001; 3'd5: font5x7 = 5'b10001; 3'd6: font5x7 = 5'b11110; default: font5x7 = 5'b00000; endcase
                 "E": case (row) 3'd0: font5x7 = 5'b11111; 3'd1: font5x7 = 5'b10000; 3'd2: font5x7 = 5'b10000; 3'd3: font5x7 = 5'b11110; 3'd4: font5x7 = 5'b10000; 3'd5: font5x7 = 5'b10000; 3'd6: font5x7 = 5'b11111; default: font5x7 = 5'b00000; endcase
+                "F": case (row) 3'd0: font5x7 = 5'b11111; 3'd1: font5x7 = 5'b10000; 3'd2: font5x7 = 5'b10000; 3'd3: font5x7 = 5'b11110; 3'd4: font5x7 = 5'b10000; 3'd5: font5x7 = 5'b10000; 3'd6: font5x7 = 5'b10000; default: font5x7 = 5'b00000; endcase
                 "G": case (row) 3'd0: font5x7 = 5'b01111; 3'd1: font5x7 = 5'b10000; 3'd2: font5x7 = 5'b10000; 3'd3: font5x7 = 5'b10111; 3'd4: font5x7 = 5'b10001; 3'd5: font5x7 = 5'b10001; 3'd6: font5x7 = 5'b01111; default: font5x7 = 5'b00000; endcase
                 "H": case (row) 3'd0: font5x7 = 5'b10001; 3'd1: font5x7 = 5'b10001; 3'd2: font5x7 = 5'b10001; 3'd3: font5x7 = 5'b11111; 3'd4: font5x7 = 5'b10001; 3'd5: font5x7 = 5'b10001; 3'd6: font5x7 = 5'b10001; default: font5x7 = 5'b00000; endcase
                 "I": case (row) 3'd0: font5x7 = 5'b01110; 3'd1: font5x7 = 5'b00100; 3'd2: font5x7 = 5'b00100; 3'd3: font5x7 = 5'b00100; 3'd4: font5x7 = 5'b00100; 3'd5: font5x7 = 5'b00100; 3'd6: font5x7 = 5'b01110; default: font5x7 = 5'b00000; endcase
@@ -179,6 +179,53 @@ module snake_render (
         end
     endfunction
 
+    function [7:0] restart_char;
+        input [2:0] idx;
+        begin
+            case (idx)
+                3'd0: restart_char = "R";
+                3'd1: restart_char = "E";
+                3'd2: restart_char = "S";
+                3'd3: restart_char = "T";
+                3'd4: restart_char = "A";
+                3'd5: restart_char = "R";
+                3'd6: restart_char = "T";
+                default: restart_char = " ";
+            endcase
+        end
+    endfunction
+
+    function [7:0] confirm_char;
+        input [2:0] idx;
+        begin
+            case (idx)
+                3'd0: confirm_char = "C";
+                3'd1: confirm_char = "O";
+                3'd2: confirm_char = "N";
+                3'd3: confirm_char = "F";
+                3'd4: confirm_char = "I";
+                3'd5: confirm_char = "R";
+                3'd6: confirm_char = "M";
+                default: confirm_char = " ";
+            endcase
+        end
+    endfunction
+
+    function [7:0] cancel_char;
+        input [2:0] idx;
+        begin
+            case (idx)
+                3'd0: cancel_char = "C";
+                3'd1: cancel_char = "A";
+                3'd2: cancel_char = "N";
+                3'd3: cancel_char = "C";
+                3'd4: cancel_char = "E";
+                3'd5: cancel_char = "L";
+                default: cancel_char = " ";
+            endcase
+        end
+    endfunction
+
     function font_pixel;
         input [7:0] ch;
         input [2:0] row;
@@ -194,6 +241,42 @@ module snake_render (
                 3'd4: font_pixel = bits[0];
                 default: font_pixel = 1'b0;
             endcase
+        end
+    endfunction
+
+    function [5:0] orbit_prev;
+        input [5:0] idx;
+        input [2:0] back;
+        begin
+            orbit_prev = (idx >= back) ? (idx - back) : (idx + 6'd63 - back);
+        end
+    endfunction
+
+    function [5:0] orbit_path_x;
+        input [5:0] idx;
+        begin
+            if (idx < 6'd24)
+                orbit_path_x = 6'd8 + idx;
+            else if (idx < 6'd32)
+                orbit_path_x = 6'd31;
+            else if (idx < 6'd56)
+                orbit_path_x = 6'd31 - (idx - 6'd32);
+            else
+                orbit_path_x = 6'd8;
+        end
+    endfunction
+
+    function [4:0] orbit_path_y;
+        input [5:0] idx;
+        begin
+            if (idx < 6'd24)
+                orbit_path_y = 5'd2;
+            else if (idx < 6'd32)
+                orbit_path_y = 5'd3 + (idx - 6'd24);
+            else if (idx < 6'd56)
+                orbit_path_y = 5'd10;
+            else
+                orbit_path_y = 5'd10 - (idx - 6'd56);
         end
     endfunction
 
@@ -269,25 +352,22 @@ module snake_render (
     wire start_pixel = start_area && start_blink &&
                        font_pixel(start_char(start_col), start_font_y, start_in_char_x[2:0]);
 
-    // Orbiting decorative snake near the title.
-    wire [9:0] snake_base_x = (orbit_phase == 2'd0) ? 10'd164 :
-                              (orbit_phase == 2'd1) ? 10'd448 :
-                              (orbit_phase == 2'd2) ? 10'd448 :
-                                                       10'd164;
-    wire [9:0] snake_base_y = (orbit_phase == 2'd0) ? 10'd44 :
-                              (orbit_phase == 2'd1) ? 10'd44 :
-                              (orbit_phase == 2'd2) ? 10'd154 :
-                                                       10'd154;
-    wire snake_horizontal = (orbit_phase == 2'd0) || (orbit_phase == 2'd2);
-    wire [9:0] snake_anim_x = snake_horizontal ? (snake_base_x + {6'd0, anim_step}) : snake_base_x;
-    wire [9:0] snake_anim_y = snake_horizontal ? snake_base_y : (snake_base_y + {6'd0, anim_step});
-    wire orbit_snake_pixel =
-        menu_active &&
-        (((pixel_x >= snake_anim_x) && (pixel_x < snake_anim_x + 10'd24) &&
-          (pixel_y >= snake_anim_y) && (pixel_y < snake_anim_y + 10'd8)) ||
-         ((pixel_x >= snake_anim_x + 10'd20) && (pixel_x < snake_anim_x + 10'd28) &&
-          (pixel_y >= snake_anim_y - 10'd4) && (pixel_y < snake_anim_y + 10'd12)));
+    // Orbiting decorative snake near the title, using the in-game 16x16 cell style.
+    wire [5:0] orbit_idx_raw = anim_cnt[26:21];
+    wire [5:0] orbit_idx = (orbit_idx_raw == 6'd63) ? 6'd0 : orbit_idx_raw;
+    wire [5:0] orbit_idx1 = orbit_prev(orbit_idx, 3'd1);
+    wire [5:0] orbit_idx2 = orbit_prev(orbit_idx, 3'd2);
+    wire [5:0] orbit_idx3 = orbit_prev(orbit_idx, 3'd3);
+    wire [5:0] orbit_idx4 = orbit_prev(orbit_idx, 3'd4);
 
+    wire orbit_head_pixel = menu_active &&
+                            (cell_x == orbit_path_x(orbit_idx)) &&
+                            (cell_y == orbit_path_y(orbit_idx));
+    wire orbit_body_pixel = menu_active &&
+                            (((cell_x == orbit_path_x(orbit_idx1)) && (cell_y == orbit_path_y(orbit_idx1))) ||
+                             ((cell_x == orbit_path_x(orbit_idx2)) && (cell_y == orbit_path_y(orbit_idx2))) ||
+                             ((cell_x == orbit_path_x(orbit_idx3)) && (cell_y == orbit_path_y(orbit_idx3))) ||
+                             ((cell_x == orbit_path_x(orbit_idx4)) && (cell_y == orbit_path_y(orbit_idx4))));
     // In-game score in top-left corner.
     wire game_score_area = (pixel_x >= 10'd8) && (pixel_x < 10'd152) &&
                            (pixel_y >= 10'd8) && (pixel_y < 10'd24);
@@ -298,6 +378,44 @@ module snake_render (
     wire [2:0] game_score_font_y = game_score_ly[3:1];
     wire game_score_pixel = game_score_area &&
                             font_pixel(score_char(game_score_col, score), game_score_font_y, game_score_in_char_x[2:0]);
+
+    // Restart confirmation overlay.
+    wire confirm_title_area = (pixel_x >= 10'd208) && (pixel_x < 10'd432) &&
+                              (pixel_y >= 10'd176) && (pixel_y < 10'd204);
+    wire [7:0] confirm_title_lx = pixel_x - 10'd208;
+    wire [4:0] confirm_title_ly = pixel_y - 10'd176;
+    wire [2:0] confirm_title_col = confirm_title_lx[7:5];
+    wire [5:0] confirm_title_in_char_x = {3'd0, confirm_title_lx[4:2]};
+    wire [2:0] confirm_title_font_y = confirm_title_ly[4:2];
+    wire confirm_title_pixel = confirm_title_area &&
+                               font_pixel(restart_char(confirm_title_col), confirm_title_font_y, confirm_title_in_char_x[2:0]);
+
+    wire confirm_option_area = (pixel_x >= 10'd88) && (pixel_x < 10'd344) &&
+                               (pixel_y >= 10'd272) && (pixel_y < 10'd304);
+    wire cancel_option_area = (pixel_x >= 10'd360) && (pixel_x < 10'd584) &&
+                              (pixel_y >= 10'd272) && (pixel_y < 10'd304);
+
+    wire [8:0] confirm_lx = pixel_x - 10'd104;
+    wire [4:0] confirm_ly = pixel_y - 10'd274;
+    wire [2:0] confirm_col = confirm_lx[7:5];
+    wire [5:0] confirm_in_char_x = {3'd0, confirm_lx[4:2]};
+    wire [2:0] confirm_font_y = confirm_ly[4:2];
+    wire confirm_text_pixel = confirm_option_area &&
+                              font_pixel(confirm_char(confirm_col), confirm_font_y, confirm_in_char_x[2:0]);
+
+    wire [7:0] cancel_lx = pixel_x - 10'd376;
+    wire [4:0] cancel_ly = pixel_y - 10'd274;
+    wire [2:0] cancel_col = cancel_lx[7:5];
+    wire [5:0] cancel_in_char_x = {3'd0, cancel_lx[4:2]};
+    wire [2:0] cancel_font_y = cancel_ly[4:2];
+    wire cancel_text_pixel = cancel_option_area &&
+                             font_pixel(cancel_char(cancel_col), cancel_font_y, cancel_in_char_x[2:0]);
+
+    wire confirm_selected_area = confirm_select ? confirm_option_area : cancel_option_area;
+    wire confirm_border_pixel = confirm_active && confirm_selected_area &&
+                                ((pixel_y < 10'd276) || (pixel_y >= 10'd300) ||
+                                 (confirm_select && ((pixel_x < 10'd92) || (pixel_x >= 10'd340))) ||
+                                 (!confirm_select && ((pixel_x < 10'd364) || (pixel_x >= 10'd580))));
 
     //----------------------------------------------------------------------
     // Color generation (registered output on vga_ce)
@@ -315,8 +433,18 @@ module snake_render (
             else if (menu_active) begin
                 if (title_pixel)
                     {vga_r, vga_g, vga_b} <= {4'd15, 4'd15, 4'd2};
-                else if (orbit_snake_pixel)
-                    {vga_r, vga_g, vga_b} <= {4'd4, 4'd15, 4'd2};
+                else if (orbit_head_pixel) begin
+                    if (is_grid_line)
+                        {vga_r, vga_g, vga_b} <= {4'd0, 4'd4, 4'd15};
+                    else
+                        {vga_r, vga_g, vga_b} <= {4'd4, 4'd8, 4'd15};
+                end
+                else if (orbit_body_pixel) begin
+                    if (is_grid_line)
+                        {vga_r, vga_g, vga_b} <= {4'd0, 4'd11, 4'd0};
+                    else
+                        {vga_r, vga_g, vga_b} <= {4'd4, 4'd15, 4'd0};
+                end
                 else if (diff_pixel || selector_pixel)
                     {vga_r, vga_g, vga_b} <= {4'd4, 4'd12, 4'd15};
                 else if (high_pixel)
@@ -329,6 +457,34 @@ module snake_render (
                     {vga_r, vga_g, vga_b} <= {4'd0, 4'd2, 4'd2};
                 else
                     {vga_r, vga_g, vga_b} <= {4'd0, 4'd3, 4'd4};
+            end
+            else if (confirm_active) begin
+                if (confirm_title_pixel)
+                    {vga_r, vga_g, vga_b} <= {4'd15, 4'd15, 4'd2};
+                else if (confirm_border_pixel)
+                    {vga_r, vga_g, vga_b} <= {4'd4, 4'd12, 4'd15};
+                else if (confirm_text_pixel) begin
+                    if (confirm_select)
+                        {vga_r, vga_g, vga_b} <= {4'd8, 4'd15, 4'd9};
+                    else
+                        {vga_r, vga_g, vga_b} <= {4'd8, 4'd8, 4'd8};
+                end
+                else if (cancel_text_pixel) begin
+                    if (!confirm_select)
+                        {vga_r, vga_g, vga_b} <= {4'd8, 4'd15, 4'd9};
+                    else
+                        {vga_r, vga_g, vga_b} <= {4'd8, 4'd8, 4'd8};
+                end
+                else if (is_food)
+                    {vga_r, vga_g, vga_b} <= {4'd8, 4'd0, 4'd0};
+                else if (is_head)
+                    {vga_r, vga_g, vga_b} <= {4'd0, 4'd2, 4'd8};
+                else if (is_snake)
+                    {vga_r, vga_g, vga_b} <= {4'd1, 4'd7, 4'd0};
+                else if (is_grid_line)
+                    {vga_r, vga_g, vga_b} <= {4'd0, 4'd1, 4'd1};
+                else
+                    {vga_r, vga_g, vga_b} <= {4'd0, 4'd1, 4'd2};
             end
             else if (game_over) begin
                 if (is_snake)

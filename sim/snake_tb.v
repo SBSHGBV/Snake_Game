@@ -28,6 +28,7 @@ module snake_tb;
     wire [3:0] AN;
     wire [7:0] SEGMENT;
     wire [7:0] LED;
+    integer tb_i;
 
     //----------------------------------------------------------------------
     // Instantiate DUT; override game_tick for fast sim
@@ -180,6 +181,44 @@ module snake_tb;
         #10_000;  // Easy difficulty: 10us = a few cells
         $display("[%0t] Snake moved right from default direction", $time);
 
+        // Freeze movement while sending slow PS/2 scan codes. The core still
+        // sees keyboard pulses, but the accelerated snake cannot hit a wall
+        // before the full R/Enter sequence is received.
+        force u_dut.game_tick = 1'b0;
+
+        $display("[%0t] Pressing R to open restart confirmation...", $time);
+        ps2_send_byte(8'h2D);
+        #1_000;
+        if (u_dut.confirm_active !== 1'b1 || u_dut.confirm_select !== 1'b0) begin
+            $display("[%0t] ERROR: R did not open restart confirmation on CANCEL", $time);
+            $finish;
+        end
+
+        $display("[%0t] Pressing ENTER to cancel restart...", $time);
+        ps2_send_byte(8'h5A);
+        #1_000;
+        if (u_dut.confirm_active !== 1'b0 || u_dut.menu_active !== 1'b0) begin
+            $display("[%0t] ERROR: restart cancel did not return to game", $time);
+            $finish;
+        end
+
+        $display("[%0t] Pressing R and confirming restart...", $time);
+        ps2_send_byte(8'h2D);
+        ps2_send_byte(8'hE0);
+        ps2_send_byte(8'h74);
+        #1_000;
+        if (u_dut.confirm_active !== 1'b1 || u_dut.confirm_select !== 1'b1) begin
+            $display("[%0t] ERROR: restart confirmation did not select CONFIRM", $time);
+            $finish;
+        end
+        ps2_send_byte(8'h5A);
+        #1_000;
+        if (u_dut.confirm_active !== 1'b0 || u_dut.menu_active !== 1'b0 || u_dut.score !== 16'd0) begin
+            $display("[%0t] ERROR: confirmed restart did not reset into gameplay", $time);
+            $finish;
+        end
+        release u_dut.game_tick;
+
         // Test 1: Press DOWN
         $display("[%0t] Pressing DOWN...", $time);
         btn_press(4'b0010);  // BTN[1] = DOWN
@@ -225,6 +264,46 @@ module snake_tb;
             $finish;
         end
         $display("[%0t] Snake restarted, moving RIGHT", $time);
+
+        // Regression: moving into the current tail cell must keep that cell
+        // occupied after the tail pointer advances.
+        $display("[%0t] Checking tail-follow grid retention...", $time);
+        force u_dut.game_tick = 1'b0;
+        u_dut.u_game.state = 2'd1;          // S_PLAYING
+        u_dut.u_game.collision_flag = 1'b0;
+        u_dut.u_game.difficulty_reg = 2'd2; // hard: move every tick
+        u_dut.u_game.move_div_cnt = 3'd0;
+        u_dut.u_game.next_dir = 2'd0;       // DIR_UP
+        u_dut.u_game.food_valid = 1'b0;
+        for (tb_i = 0; tb_i < 1200; tb_i = tb_i + 1)
+            u_dut.u_game.grid_reg[tb_i] = 1'b0;
+        u_dut.u_game.grid_reg[15*40 + 20] = 1'b1; // tail, also next head
+        u_dut.u_game.grid_reg[15*40 + 21] = 1'b1;
+        u_dut.u_game.grid_reg[16*40 + 21] = 1'b1;
+        u_dut.u_game.grid_reg[16*40 + 20] = 1'b1; // current head
+        u_dut.u_game.snake_x[0] = 6'd20; u_dut.u_game.snake_y[0] = 5'd15;
+        u_dut.u_game.snake_x[1] = 6'd21; u_dut.u_game.snake_y[1] = 5'd15;
+        u_dut.u_game.snake_x[2] = 6'd21; u_dut.u_game.snake_y[2] = 5'd16;
+        u_dut.u_game.snake_x[3] = 6'd20; u_dut.u_game.snake_y[3] = 5'd16;
+        u_dut.u_game.head_idx = 8'd4;
+        u_dut.u_game.tail_idx = 8'd0;
+        u_dut.u_game.snake_len = 9'd4;
+        u_dut.u_game.head_x_reg = 6'd20;
+        u_dut.u_game.head_y_reg = 5'd16;
+        #100;
+        force u_dut.game_tick = 1'b1;
+        @(posedge clk);
+        #1;
+        force u_dut.game_tick = 1'b0;
+        if (u_dut.u_game.grid_reg[15*40 + 20] !== 1'b1 ||
+            u_dut.u_game.tail_idx !== 8'd1 ||
+            u_dut.u_game.head_x !== 6'd20 ||
+            u_dut.u_game.head_y !== 5'd15) begin
+            $display("[%0t] ERROR: moving into tail did not retain the shared cell", $time);
+            $finish;
+        end
+        release u_dut.game_tick;
+        $display("[%0t] Tail-follow grid retention passed", $time);
 
         $display("=== Snake Game Testbench Complete ===");
         $display("Smoke checks passed; inspect waveform for score and direction details.");

@@ -1,6 +1,6 @@
 //============================================================================
 // snake_top.v - Snake Game Top-Level Module (Kintex-7)
-//   Reset opens the start menu. BTNX4 starts or restarts.
+//   Reset opens the start menu. R opens restart confirmation while playing.
 //   Control: BTN[3:0] buttons + PS/2 keyboard (arrow keys / WASD)
 //============================================================================
 `timescale 1ns / 1ps
@@ -63,7 +63,7 @@ module snake_top (
     //----------------------------------------------------------------------
     // PS/2 Keyboard controller (arrow keys + WASD + Enter/Space/R)
     //----------------------------------------------------------------------
-    wire kb_up, kb_down, kb_left, kb_right, kb_start;
+    wire kb_up, kb_down, kb_left, kb_right, kb_start, kb_restart;
 
     ps2_keyboard u_kb (
         .clk       (clk),
@@ -74,7 +74,8 @@ module snake_top (
         .btn_down  (kb_down),
         .btn_left  (kb_left),
         .btn_right (kb_right),
-        .btn_start (kb_start)
+        .btn_start (kb_start),
+        .btn_restart(kb_restart)
     );
 
     // Merge keyboard + button inputs (either source works)
@@ -83,6 +84,7 @@ module snake_top (
     wire dir_left  = btn_left  || kb_left;
     wire dir_right = btn_right || kb_right;
     wire start_sig = btn_start || kb_start;
+    wire restart_sig = kb_restart;
 
     //----------------------------------------------------------------------
     // LFSR
@@ -103,6 +105,8 @@ module snake_top (
     wire [15:0]   score;
     wire          game_over;
     wire          menu_active;
+    wire          confirm_active;
+    wire          confirm_select;
     wire [1:0]    difficulty;
     wire [15:0]   high_score_easy;
     wire [15:0]   high_score_normal;
@@ -122,10 +126,13 @@ module snake_top (
         .btn_left        (dir_left),
         .btn_right       (dir_right),
         .btn_start       (start_sig),
+        .btn_restart     (restart_sig),
         .lfsr_val        (lfsr_val),
         .score           (score),
         .game_over       (game_over),
         .menu_active     (menu_active),
+        .confirm_active  (confirm_active),
+        .confirm_select  (confirm_select),
         .difficulty      (difficulty),
         .high_score_easy (high_score_easy),
         .high_score_normal(high_score_normal),
@@ -166,6 +173,8 @@ module snake_top (
         .pixel_y         (pixel_y),
         .game_over       (game_over),
         .menu_active     (menu_active),
+        .confirm_active  (confirm_active),
+        .confirm_select  (confirm_select),
         .difficulty      (difficulty),
         .score           (score),
         .high_score_easy (high_score_easy),
