@@ -2,6 +2,7 @@
 // snake_top.v - Snake Game Top-Level Module (Kintex-7)
 //   Reset opens the start menu. Esc opens the pause menu while playing.
 //   Control: BTN[3:0] buttons + PS/2 keyboard (arrow keys / WASD)
+//   Audio: piezo buzzer plays Korobeiniki (Tetris theme) on loop
 //============================================================================
 `timescale 1ns / 1ps
 
@@ -16,7 +17,8 @@ module snake_top (
     output wire        hs, vs,       // VGA sync
     output wire [3:0]  AN,           // 7-seg anode
     output wire [7:0]  SEGMENT,      // 7-seg segments
-    output wire [7:0]  LED           // status LEDs
+    output wire [7:0]  LED,          // status LEDs
+    output wire        buzzer        // piezo buzzer (music)
 );
 
     //----------------------------------------------------------------------
@@ -199,6 +201,16 @@ module snake_top (
         .score   (score),
         .AN      (AN),
         .SEGMENT (SEGMENT)
+    );
+
+    //----------------------------------------------------------------------
+    // Buzzer — play music during menu and gameplay, mute during pause
+    //----------------------------------------------------------------------
+    buzzer u_buzzer (
+        .clk        (clk),
+        .rst        (rst),
+        .enable     (~pause_active),   // mute when pause menu is open
+        .buzzer_out (buzzer)
     );
 
     //----------------------------------------------------------------------
