@@ -57,6 +57,13 @@ module snake_tb;
     // Override dead timer: ~10us instead of ~2s
     defparam u_dut.u_game.DEAD_TIME = 25'd999;
 
+    // Accelerate debounce sampling for simulation.
+    defparam u_dut.u_db0.SAMPLE_MAX = 17'd9;
+    defparam u_dut.u_db1.SAMPLE_MAX = 17'd9;
+    defparam u_dut.u_db2.SAMPLE_MAX = 17'd9;
+    defparam u_dut.u_db3.SAMPLE_MAX = 17'd9;
+    defparam u_dut.u_dbs.SAMPLE_MAX = 17'd9;
+
     //----------------------------------------------------------------------
     // Helper task: press a button (active-low: 0 = pressed)
     //----------------------------------------------------------------------
@@ -64,7 +71,7 @@ module snake_tb;
         input [3:0] btn_idx;  // bitmask: 4'b0001=BTN[0], etc.
         begin
             BTN = BTN & ~btn_idx;       // drive low (pressed)
-            #2_000_000;                 // hold 2ms (>16 sample_ticks)
+            #5_000;                     // hold long enough for accelerated debounce
             BTN = BTN | btn_idx;        // release (back to pull-up)
             #500_000;                   // settle
         end
@@ -76,7 +83,7 @@ module snake_tb;
     task start_press;
         begin
             BTNX4 = 1'b0;               // pressed (active-low)
-            #2_000_000;                 // hold 2ms
+            #5_000;                     // hold long enough for accelerated debounce
             BTNX4 = 1'b1;               // release
             #500_000;
         end
@@ -99,12 +106,18 @@ module snake_tb;
         #2_000;             // wait for POR (~2.5us)
 
         $display("=== Snake Game Testbench Start ===");
-        $display("[%0t] POR done, snake auto-starts in S_PLAYING", $time);
+        $display("[%0t] POR done, start menu is visible", $time);
+
+        // Choose Hard from the menu, then start.
+        $display("[%0t] Selecting HARD difficulty...", $time);
+        btn_press(4'b1000);  // RIGHT: Normal -> Hard
+        $display("[%0t] Pressing START to enter game...", $time);
+        start_press();
 
         // Wait a few game ticks — snake auto-moves RIGHT
         // game_tick period = 100 * 10ns = 1us
-        #50_000;  // 50us = ~50 game ticks, snake should move right ~8 cells
-        $display("[%0t] Snake moved right for ~8 cells (default direction)", $time);
+        #10_000;  // Hard difficulty: 10us = ~10 cells
+        $display("[%0t] Snake moved right from default direction", $time);
 
         // Test 1: Press DOWN
         $display("[%0t] Pressing DOWN...", $time);
@@ -140,7 +153,7 @@ module snake_tb;
         // Test 6: Wait for auto-restart (~10us in sim, ~2s in hardware)
         // DEAD_TIME overridden to 999 cycles ≈ 10us
         #50_000;
-        $display("[%0t] Pressing START to restart (or auto-restart already fired)...", $time);
+        $display("[%0t] Pressing START from menu after auto-return...", $time);
         start_press();
         #50_000;
         $display("[%0t] Snake restarted, moving RIGHT", $time);

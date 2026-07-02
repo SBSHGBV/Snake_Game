@@ -7,7 +7,9 @@
 //============================================================================
 `timescale 1ns / 1ps
 
-module debounce (
+module debounce #(
+    parameter SAMPLE_MAX = 17'd99_999
+) (
     input  wire clk,         // 100MHz system clock
     input  wire rst,         // asynchronous reset
     input  wire btn_in,      // raw button input
@@ -19,7 +21,7 @@ module debounce (
     // Slow sample enable (~1kHz): 100MHz / 100,000 = 1kHz
     //----------------------------------------------------------------------
     reg [16:0] sample_cnt;
-    wire sample_tick = (sample_cnt == 17'd99_999);
+    wire sample_tick = (sample_cnt == SAMPLE_MAX);
 
     always @(posedge clk or posedge rst) begin
         if (rst)

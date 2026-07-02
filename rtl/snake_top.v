@@ -98,10 +98,15 @@ module snake_top (
     );
 
     //----------------------------------------------------------------------
-    // Snake game core — auto-starts in S_PLAYING after internal POR
+    // Snake game core — reset enters the start menu
     //----------------------------------------------------------------------
     wire [15:0]   score;
     wire          game_over;
+    wire          menu_active;
+    wire [1:0]    difficulty;
+    wire [15:0]   high_score_easy;
+    wire [15:0]   high_score_normal;
+    wire [15:0]   high_score_hard;
     wire [1199:0] snake_grid_flat;
     wire [5:0]    food_x;
     wire [4:0]    food_y;
@@ -120,6 +125,11 @@ module snake_top (
         .lfsr_val        (lfsr_val),
         .score           (score),
         .game_over       (game_over),
+        .menu_active     (menu_active),
+        .difficulty      (difficulty),
+        .high_score_easy (high_score_easy),
+        .high_score_normal(high_score_normal),
+        .high_score_hard (high_score_hard),
         .snake_grid_flat (snake_grid_flat),
         .food_x          (food_x),
         .food_y          (food_y),
@@ -155,6 +165,12 @@ module snake_top (
         .pixel_x         (pixel_x),
         .pixel_y         (pixel_y),
         .game_over       (game_over),
+        .menu_active     (menu_active),
+        .difficulty      (difficulty),
+        .score           (score),
+        .high_score_easy (high_score_easy),
+        .high_score_normal(high_score_normal),
+        .high_score_hard (high_score_hard),
         .snake_grid_flat (snake_grid_flat),
         .food_x          (food_x),
         .food_y          (food_y),
@@ -187,12 +203,12 @@ module snake_top (
             hb_cnt <= hb_cnt + 25'd1;
     end
 
-    assign LED[0] = ~game_over;       // on while playing
+    assign LED[0] = ~game_over & ~menu_active; // on while playing
     assign LED[1] = game_over;        // on when dead
     assign LED[2] = hb_cnt[24];       // ~1.5 Hz heartbeat
-    assign LED[3] = score[4];         // score >= 10
-    assign LED[4] = score[8];         // score >= 100
-    assign LED[5] = score[12];        // score >= 1000
+    assign LED[3] = menu_active;      // menu visible
+    assign LED[4] = difficulty[0];    // difficulty indicator
+    assign LED[5] = difficulty[1];    // difficulty indicator
     assign LED[6] = |score;           // any score
     assign LED[7] = game_tick;        // tick strobe
 

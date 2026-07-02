@@ -18,6 +18,11 @@ module snake_game (
     input  wire [15:0] lfsr_val,           // LFSR random value snapshot
     output wire [15:0] score,              // BCD score (4 digits)
     output wire        game_over,          // game over flag
+    output wire        menu_active,        // start menu flag
+    output wire [1:0]  difficulty,         // 0=easy, 1=normal, 2=hard
+    output wire [15:0] high_score_easy,    // BCD high score per difficulty
+    output wire [15:0] high_score_normal,
+    output wire [15:0] high_score_hard,
     output wire [1199:0] snake_grid_flat,  // snake body grid
     output wire [5:0]  food_x,             // food X position
     output wire [4:0]  food_y,             // food Y position
@@ -28,7 +33,7 @@ module snake_game (
     //----------------------------------------------------------------------
     // State machine
     //----------------------------------------------------------------------
-    localparam S_IDLE    = 2'd0;
+    localparam S_MENU    = 2'd0;
     localparam S_PLAYING = 2'd1;
     localparam S_DEAD    = 2'd2;
 
@@ -51,11 +56,12 @@ module snake_game (
     // Snake body FIFO
     reg [5:0]  snake_x [0:MAX_LEN-1];
     reg [4:0]  snake_y [0:MAX_LEN-1];
-    reg [7:0]  head_idx, tail_idx, snake_len;
+    reg [7:0]  head_idx, tail_idx;
+    reg [8:0]  snake_len;
 
-    // Direction
-    reg [1:0]  direction;
     reg [1:0]  next_dir;
+    reg [1:0]  difficulty_reg;
+    reg [2:0]  move_div_cnt;
 
     // Head position
     reg [5:0]  head_x_reg, head_y_reg;
@@ -67,6 +73,9 @@ module snake_game (
 
     // Score
     reg [15:0] score_reg;
+    reg [15:0] high_easy_reg;
+    reg [15:0] high_normal_reg;
+    reg [15:0] high_hard_reg;
 
     // Grid: 40x30 = 1200 bits
     reg [1199:0] grid_reg;
@@ -75,11 +84,11 @@ module snake_game (
     reg        collision_flag;
 
     //----------------------------------------------------------------------
-    // State machine: auto-starts in S_PLAYING after reset
+    // State machine: reset enters the start menu
     //----------------------------------------------------------------------
     always @(posedge clk or posedge rst) begin
         if (rst)
-            state <= S_PLAYING;     // auto-start on power-up
+            state <= S_MENU;
         else
             state <= next_state;
     end
@@ -87,9 +96,10 @@ module snake_game (
     always @(*) begin
         next_state = state;
         case (state)
-            S_PLAYING: if (collision_flag)                next_state = S_DEAD;
-            S_DEAD:    if (dead_timer == 25'd0 || btn_start) next_state = S_PLAYING;
-            default:                                       next_state = S_PLAYING;
+            S_MENU:    if (btn_start)                         next_state = S_PLAYING;
+            S_PLAYING: if (collision_flag)                     next_state = S_DEAD;
+            S_DEAD:    if (dead_timer == 25'd0 || btn_start)  next_state = S_MENU;
+            default:                                          next_state = S_MENU;
         endcase
     end
 
@@ -111,14 +121,10 @@ module snake_game (
     //----------------------------------------------------------------------
     always @(posedge clk or posedge rst) begin
         if (rst) begin
-            direction <= DIR_RIGHT;
             next_dir   <= DIR_RIGHT;
         end
-        else if (state == S_DEAD || btn_start) begin
-            // Reset direction on death or manual restart
-            direction <= DIR_RIGHT;
-            next_dir   <= DIR_RIGHT;
-        end
+        else if (state != S_PLAYING)
+            next_dir <= DIR_RIGHT;
         else if (state == S_PLAYING) begin
             // 180° prevention: check against next_dir (queued), not direction (committed).
             // This prevents rapid key sequences (e.g. DOWN then UP) from bypassing the check
@@ -131,6 +137,40 @@ module snake_game (
                 next_dir <= DIR_LEFT;
             else if (btn_right && next_dir != DIR_LEFT)
                 next_dir <= DIR_RIGHT;
+        end
+    end
+
+    //----------------------------------------------------------------------
+    // Menu difficulty selection
+    //----------------------------------------------------------------------
+    always @(posedge clk or posedge rst) begin
+        if (rst)
+            difficulty_reg <= 2'd1;  // normal
+        else if (state == S_MENU) begin
+            if ((btn_left || btn_up) && difficulty_reg != 2'd0)
+                difficulty_reg <= difficulty_reg - 2'd1;
+            else if ((btn_right || btn_down) && difficulty_reg != 2'd2)
+                difficulty_reg <= difficulty_reg + 2'd1;
+        end
+    end
+
+    wire [2:0] move_div_limit =
+        (difficulty_reg == 2'd0) ? 3'd3 :   // easy:   base tick / 4
+        (difficulty_reg == 2'd1) ? 3'd1 :   // normal: base tick / 2
+                                   3'd0;    // hard:   base tick
+
+    wire move_tick = (state == S_PLAYING) && game_tick && (move_div_cnt == move_div_limit);
+
+    always @(posedge clk or posedge rst) begin
+        if (rst)
+            move_div_cnt <= 3'd0;
+        else if (state != S_PLAYING)
+            move_div_cnt <= 3'd0;
+        else if (game_tick) begin
+            if (move_div_cnt == move_div_limit)
+                move_div_cnt <= 3'd0;
+            else
+                move_div_cnt <= move_div_cnt + 3'd1;
         end
     end
 
@@ -158,21 +198,26 @@ module snake_game (
     wire wall_collision = (new_head_x >= 6'd40) || (new_head_y >= 5'd30);
     // Guard grid read: prevent out-of-bounds access when coordinates underflow
     wire in_bounds      = (new_head_x < 6'd40) && (new_head_y < 5'd30);
-    wire self_collision = in_bounds ? grid_reg[new_head_y * 40 + new_head_x] : 1'b0;
+    wire [10:0] new_head_idx = new_head_y * 40 + new_head_x;
+    wire [10:0] tail_cell_idx = snake_y[tail_idx] * 40 + snake_x[tail_idx];
+    wire        will_grow = food_valid && (new_head_x == food_x_reg) && (new_head_y == food_y_reg);
+    wire        moving_into_tail = in_bounds && !will_grow && (new_head_idx == tail_cell_idx);
+    wire        self_collision = in_bounds ? (grid_reg[new_head_idx] && !moving_into_tail) : 1'b0;
 
     always @(posedge clk or posedge rst) begin
         if (rst)
             collision_flag <= 1'b0;
         else if (state != S_PLAYING)
             collision_flag <= 1'b0;
-        else if (game_tick)
+        else if (move_tick)
             collision_flag <= wall_collision || self_collision;
     end
 
     assign game_over = (state == S_DEAD);
+    assign menu_active = (state == S_MENU);
 
     // Food eaten check (only when food is validly placed)
-    wire food_eaten = food_valid && game_tick && (new_head_x == food_x_reg) && (new_head_y == food_y_reg);
+    wire food_eaten = food_valid && move_tick && will_grow;
 
     //----------------------------------------------------------------------
     // Snake movement + grid update (on game_tick)
@@ -194,13 +239,12 @@ module snake_game (
 
             head_idx  <= 8'd3;
             tail_idx  <= 8'd0;
-            snake_len <= 8'd3;
+            snake_len <= 9'd3;
             head_x_reg    <= 6'd20;
             head_y_reg    <= 5'd15;
         end
         // Entering playing state: reset snake body
-        else if ((state == S_DEAD && next_state == S_PLAYING) ||
-                 (state == S_PLAYING && btn_start)) begin
+        else if (state == S_MENU && next_state == S_PLAYING) begin
             for (i = 0; i < 1200; i = i + 1)
                 grid_reg[i] <= 1'b0;
 
@@ -214,15 +258,12 @@ module snake_game (
 
             head_idx  <= 8'd3;
             tail_idx  <= 8'd0;
-            snake_len <= 8'd3;
+            snake_len <= 9'd3;
             head_x_reg    <= 6'd20;
             head_y_reg    <= 5'd15;
         end
         // Normal movement — block if collision would occur THIS tick
-        else if (state == S_PLAYING && game_tick && !wall_collision && !self_collision) begin
-            // Commit direction
-            direction <= next_dir;
-
+        else if (move_tick && !wall_collision && !self_collision) begin
             // Add new head
             grid_reg[new_head_y * 40 + new_head_x] <= 1'b1;
             snake_x[head_idx] <= new_head_x;
@@ -232,7 +273,7 @@ module snake_game (
             head_y_reg   <= new_head_y;
 
             if (food_eaten && snake_len < MAX_LEN) begin
-                snake_len <= snake_len + 8'd1;
+                snake_len <= snake_len + 9'd1;
             end else begin
                 // Remove tail
                 grid_reg[snake_y[tail_idx] * 40 + snake_x[tail_idx]] <= 1'b0;
@@ -257,7 +298,7 @@ module snake_game (
         end
         else if (state == S_PLAYING) begin
             // Invalidate food when eaten or on manual restart
-            if ((game_tick && food_eaten) || btn_start)
+            if (food_eaten)
                 food_valid <= 1'b0;
 
             // Generate new food if needed (retries every cycle until success)
@@ -282,9 +323,9 @@ module snake_game (
     always @(posedge clk or posedge rst) begin
         if (rst)
             score_reg <= 16'd0;
-        else if (state == S_DEAD && (dead_timer == 25'd0 || btn_start))
+        else if (state == S_MENU && next_state == S_PLAYING)
             score_reg <= 16'd0;
-        else if (state == S_PLAYING && game_tick && food_eaten && score_reg != 16'h9999) begin
+        else if (state == S_PLAYING && food_eaten && score_reg != 16'h9999) begin
             if (score_reg[3:0] == 4'd9) begin
                 score_reg[3:0] <= 4'd0;
                 if (score_reg[7:4] == 4'd9) begin
@@ -302,9 +343,32 @@ module snake_game (
     end
 
     //----------------------------------------------------------------------
+    // High score history (per difficulty)
+    //----------------------------------------------------------------------
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            high_easy_reg   <= 16'd0;
+            high_normal_reg <= 16'd0;
+            high_hard_reg   <= 16'd0;
+        end
+        else if (move_tick && (wall_collision || self_collision)) begin
+            case (difficulty_reg)
+                2'd0: if (score_reg > high_easy_reg)   high_easy_reg   <= score_reg;
+                2'd1: if (score_reg > high_normal_reg) high_normal_reg <= score_reg;
+                2'd2: if (score_reg > high_hard_reg)   high_hard_reg   <= score_reg;
+                default: ;
+            endcase
+        end
+    end
+
+    //----------------------------------------------------------------------
     // Outputs
     //----------------------------------------------------------------------
     assign score           = score_reg;
+    assign difficulty      = difficulty_reg;
+    assign high_score_easy = high_easy_reg;
+    assign high_score_normal = high_normal_reg;
+    assign high_score_hard = high_hard_reg;
     assign snake_grid_flat = grid_reg;
     assign food_x          = food_x_reg;
     assign food_y          = food_y_reg;
