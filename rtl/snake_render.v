@@ -57,11 +57,34 @@ module snake_render (
     // Animation frame counter for the menu snake
     //----------------------------------------------------------------------
     reg [25:0] anim_cnt;
+    reg [24:0] orbit_step_cnt;
+    reg [5:0]  orbit_idx_reg;
+    localparam [24:0] ORBIT_STEP_EASY   = 25'd19_999_999; // 0.8s at 25MHz vga_ce
+    localparam [24:0] ORBIT_STEP_NORMAL = 25'd9_999_999;  // 0.4s at 25MHz vga_ce
+    localparam [24:0] ORBIT_STEP_HARD   = 25'd4_999_999;  // 0.2s at 25MHz vga_ce
+
+    wire [24:0] orbit_step_limit =
+        (difficulty == 2'd0) ? ORBIT_STEP_EASY :
+        (difficulty == 2'd1) ? ORBIT_STEP_NORMAL :
+                               ORBIT_STEP_HARD;
+
     always @(posedge clk or posedge rst) begin
-        if (rst)
+        if (rst) begin
             anim_cnt <= 26'd0;
-        else if (vga_ce)
+            orbit_step_cnt <= 25'd0;
+            orbit_idx_reg <= 6'd0;
+        end
+        else if (vga_ce) begin
             anim_cnt <= anim_cnt + 26'd1;
+            if (menu_active) begin
+                if (orbit_step_cnt >= orbit_step_limit) begin
+                    orbit_step_cnt <= 25'd0;
+                    orbit_idx_reg <= (orbit_idx_reg == 6'd61) ? 6'd0 : (orbit_idx_reg + 6'd1);
+                end
+                else
+                    orbit_step_cnt <= orbit_step_cnt + 25'd1;
+            end
+        end
     end
 
     //----------------------------------------------------------------------
@@ -100,6 +123,7 @@ module snake_render (
                 "S": case (row) 3'd0: font5x7 = 5'b01111; 3'd1: font5x7 = 5'b10000; 3'd2: font5x7 = 5'b10000; 3'd3: font5x7 = 5'b01110; 3'd4: font5x7 = 5'b00001; 3'd5: font5x7 = 5'b00001; 3'd6: font5x7 = 5'b11110; default: font5x7 = 5'b00000; endcase
                 "T": case (row) 3'd0: font5x7 = 5'b11111; 3'd1: font5x7 = 5'b00100; 3'd2: font5x7 = 5'b00100; 3'd3: font5x7 = 5'b00100; 3'd4: font5x7 = 5'b00100; 3'd5: font5x7 = 5'b00100; 3'd6: font5x7 = 5'b00100; default: font5x7 = 5'b00000; endcase
                 "U": case (row) 3'd0: font5x7 = 5'b10001; 3'd1: font5x7 = 5'b10001; 3'd2: font5x7 = 5'b10001; 3'd3: font5x7 = 5'b10001; 3'd4: font5x7 = 5'b10001; 3'd5: font5x7 = 5'b10001; 3'd6: font5x7 = 5'b01110; default: font5x7 = 5'b00000; endcase
+                "V": case (row) 3'd0: font5x7 = 5'b10001; 3'd1: font5x7 = 5'b10001; 3'd2: font5x7 = 5'b10001; 3'd3: font5x7 = 5'b10001; 3'd4: font5x7 = 5'b10001; 3'd5: font5x7 = 5'b01010; 3'd6: font5x7 = 5'b00100; default: font5x7 = 5'b00000; endcase
                 "X": case (row) 3'd0: font5x7 = 5'b10001; 3'd1: font5x7 = 5'b10001; 3'd2: font5x7 = 5'b01010; 3'd3: font5x7 = 5'b00100; 3'd4: font5x7 = 5'b01010; 3'd5: font5x7 = 5'b10001; 3'd6: font5x7 = 5'b10001; default: font5x7 = 5'b00000; endcase
                 "Y": case (row) 3'd0: font5x7 = 5'b10001; 3'd1: font5x7 = 5'b10001; 3'd2: font5x7 = 5'b01010; 3'd3: font5x7 = 5'b00100; 3'd4: font5x7 = 5'b00100; 3'd5: font5x7 = 5'b00100; 3'd6: font5x7 = 5'b00100; default: font5x7 = 5'b00000; endcase
                 "!": case (row) 3'd0: font5x7 = 5'b00100; 3'd1: font5x7 = 5'b00100; 3'd2: font5x7 = 5'b00100; 3'd3: font5x7 = 5'b00100; 3'd4: font5x7 = 5'b00100; 3'd5: font5x7 = 5'b00000; 3'd6: font5x7 = 5'b00100; default: font5x7 = 5'b00000; endcase
@@ -138,6 +162,24 @@ module snake_render (
                 4'd6: score_char = 8'd48 + val[11:8];
                 4'd7: score_char = 8'd48 + val[7:4];
                 default: score_char = 8'd48 + val[3:0];
+            endcase
+        end
+    endfunction
+
+    function [7:0] game_over_char;
+        input [3:0] idx;
+        begin
+            case (idx)
+                4'd0: game_over_char = "G";
+                4'd1: game_over_char = "A";
+                4'd2: game_over_char = "M";
+                4'd3: game_over_char = "E";
+                4'd4: game_over_char = " ";
+                4'd5: game_over_char = "O";
+                4'd6: game_over_char = "V";
+                4'd7: game_over_char = "E";
+                4'd8: game_over_char = "R";
+                default: game_over_char = " ";
             endcase
         end
     endfunction
@@ -261,7 +303,7 @@ module snake_render (
         input [5:0] idx;
         input [2:0] back;
         begin
-            orbit_prev = (idx >= back) ? (idx - back) : (idx + 6'd63 - back);
+            orbit_prev = (idx >= back) ? (idx - back) : (idx + 6'd62 - back);
         end
     endfunction
 
@@ -269,13 +311,13 @@ module snake_render (
         input [5:0] idx;
         begin
             if (idx < 6'd24)
-                orbit_path_x = 6'd8 + idx;
+                orbit_path_x = 6'd7 + idx;
             else if (idx < 6'd32)
-                orbit_path_x = 6'd31;
-            else if (idx < 6'd56)
-                orbit_path_x = 6'd31 - (idx - 6'd32);
+                orbit_path_x = 6'd30;
+            else if (idx < 6'd55)
+                orbit_path_x = 6'd29 - (idx - 6'd32);
             else
-                orbit_path_x = 6'd8;
+                orbit_path_x = 6'd7;
         end
     endfunction
 
@@ -286,10 +328,10 @@ module snake_render (
                 orbit_path_y = 5'd2;
             else if (idx < 6'd32)
                 orbit_path_y = 5'd3 + (idx - 6'd24);
-            else if (idx < 6'd56)
+            else if (idx < 6'd55)
                 orbit_path_y = 5'd10;
             else
-                orbit_path_y = 5'd10 - (idx - 6'd56);
+                orbit_path_y = 5'd9 - (idx - 6'd55);
         end
     endfunction
 
@@ -366,8 +408,7 @@ module snake_render (
                        font_pixel(start_char(start_col), start_font_y, start_in_char_x[2:0]);
 
     // Orbiting decorative snake near the title, using the in-game 16x16 cell style.
-    wire [5:0] orbit_idx_raw = anim_cnt[25:20];
-    wire [5:0] orbit_idx = (orbit_idx_raw == 6'd63) ? 6'd0 : orbit_idx_raw;
+    wire [5:0] orbit_idx = orbit_idx_reg;
     wire [5:0] orbit_idx1 = orbit_prev(orbit_idx, 3'd1);
     wire [5:0] orbit_idx2 = orbit_prev(orbit_idx, 3'd2);
     wire [5:0] orbit_idx3 = orbit_prev(orbit_idx, 3'd3);
@@ -445,6 +486,31 @@ module snake_render (
                               (pixel_x < 10'd256) || (pixel_x >= 10'd384));
     wire pause_border_pixel = restart_border_pixel || cancel_border_pixel || exit_border_pixel;
 
+    // Game-over overlay.
+    wire game_over_title_area = (pixel_x >= 10'd176) && (pixel_x < 10'd464) &&
+                                (pixel_y >= 10'd176) && (pixel_y < 10'd204);
+    wire [8:0] game_over_title_lx = pixel_x - 10'd176;
+    wire [4:0] game_over_title_ly = pixel_y - 10'd176;
+    wire [3:0] game_over_title_col = game_over_title_lx[8:5];
+    wire [5:0] game_over_title_in_char_x = {3'd0, game_over_title_lx[4:2]};
+    wire [2:0] game_over_title_font_y = game_over_title_ly[4:2];
+    wire game_over_title_pixel = game_over_title_area &&
+                                 font_pixel(game_over_char(game_over_title_col),
+                                            game_over_title_font_y,
+                                            game_over_title_in_char_x[2:0]);
+
+    wire final_score_area = (pixel_x >= 10'd176) && (pixel_x < 10'd464) &&
+                            (pixel_y >= 10'd248) && (pixel_y < 10'd276);
+    wire [8:0] final_score_lx = pixel_x - 10'd176;
+    wire [4:0] final_score_ly = pixel_y - 10'd248;
+    wire [3:0] final_score_col = final_score_lx[8:5];
+    wire [5:0] final_score_in_char_x = {3'd0, final_score_lx[4:2]};
+    wire [2:0] final_score_font_y = final_score_ly[4:2];
+    wire final_score_pixel = final_score_area &&
+                             font_pixel(score_char(final_score_col, score),
+                                        final_score_font_y,
+                                        final_score_in_char_x[2:0]);
+
     //----------------------------------------------------------------------
     // Color generation (registered output on vga_ce)
     //----------------------------------------------------------------------
@@ -521,7 +587,11 @@ module snake_render (
                     {vga_r, vga_g, vga_b} <= {4'd0, 4'd1, 4'd2};
             end
             else if (game_over) begin
-                if (is_snake)
+                if (game_over_title_pixel)
+                    {vga_r, vga_g, vga_b} <= {4'd15, 4'd15, 4'd15};
+                else if (final_score_pixel)
+                    {vga_r, vga_g, vga_b} <= {4'd15, 4'd10, 4'd2};
+                else if (is_snake)
                     {vga_r, vga_g, vga_b} <= {4'd15, 4'd4, 4'd0};
                 else if (is_food)
                     {vga_r, vga_g, vga_b} <= {4'd15, 4'd0, 4'd0};

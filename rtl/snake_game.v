@@ -54,20 +54,18 @@ module snake_game (
 
     // Constants (parameters for sim override)
     parameter MAX_LEN   = 256;
-    parameter DEAD_TIME = 28'd199_999_999;  // ~2 sec at 100MHz
 
     //----------------------------------------------------------------------
     // Registers
     //----------------------------------------------------------------------
     reg [1:0]  state, next_state;
-    reg [27:0] dead_timer;
-
     // Snake body FIFO
     reg [5:0]  snake_x [0:MAX_LEN-1];
     reg [4:0]  snake_y [0:MAX_LEN-1];
     reg [7:0]  head_idx, tail_idx;
     reg [8:0]  snake_len;
 
+    reg [1:0]  current_dir;
     reg [1:0]  next_dir;
     reg [1:0]  difficulty_reg;
     reg [2:0]  move_div_cnt;
@@ -109,7 +107,7 @@ module snake_game (
             S_MENU:    if (btn_start)                         next_state = S_PLAYING;
             S_PLAYING: if (collision_flag)                     next_state = S_DEAD;
                        else if (btn_pause)                    next_state = S_PAUSE;
-            S_DEAD:    if (dead_timer == 28'd0 || btn_start)  next_state = S_MENU;
+            S_DEAD:    if (btn_start)                         next_state = S_MENU;
             S_PAUSE:   if (pause_exit)                        next_state = S_MENU;
                        else if (pause_restart || pause_cancel) next_state = S_PLAYING;
             default:                                          next_state = S_MENU;
@@ -121,40 +119,34 @@ module snake_game (
     wire pause_exit    = (state == S_PAUSE) && btn_start && (pause_select_reg == MENU_EXIT);
 
     //----------------------------------------------------------------------
-    // Dead timer
-    //----------------------------------------------------------------------
-    always @(posedge clk or posedge rst) begin
-        if (rst)
-            dead_timer <= DEAD_TIME;
-        else if (state == S_DEAD) begin
-            if (dead_timer > 0)
-                dead_timer <= dead_timer - 28'd1;
-        end else
-            dead_timer <= DEAD_TIME;
-    end
-
-    //----------------------------------------------------------------------
     // Direction control
     //----------------------------------------------------------------------
     always @(posedge clk or posedge rst) begin
         if (rst) begin
-            next_dir   <= DIR_RIGHT;
+            current_dir <= DIR_RIGHT;
+            next_dir    <= DIR_RIGHT;
         end
-        else if (pause_restart)
-            next_dir <= DIR_RIGHT;
-        else if (state == S_MENU || state == S_DEAD)
-            next_dir <= DIR_RIGHT;
+        else if (pause_restart) begin
+            current_dir <= DIR_RIGHT;
+            next_dir    <= DIR_RIGHT;
+        end
+        else if (state == S_MENU || state == S_DEAD) begin
+            current_dir <= DIR_RIGHT;
+            next_dir    <= DIR_RIGHT;
+        end
         else if (state == S_PLAYING) begin
-            // 180 degree prevention: check against next_dir (queued), not direction (committed).
-            // This prevents rapid key sequences (e.g. DOWN then UP) from bypassing the check
-            // before the next game_tick commits the direction.
-            if (btn_up && next_dir != DIR_DOWN)
+            if (move_tick && !wall_collision && !self_collision)
+                current_dir <= next_dir;
+
+            // Compare against the last committed movement direction, while keeping
+            // the last valid queued input before the next move tick.
+            if (btn_up && current_dir != DIR_DOWN)
                 next_dir <= DIR_UP;
-            else if (btn_down && next_dir != DIR_UP)
+            else if (btn_down && current_dir != DIR_UP)
                 next_dir <= DIR_DOWN;
-            else if (btn_left && next_dir != DIR_RIGHT)
+            else if (btn_left && current_dir != DIR_RIGHT)
                 next_dir <= DIR_LEFT;
-            else if (btn_right && next_dir != DIR_LEFT)
+            else if (btn_right && current_dir != DIR_LEFT)
                 next_dir <= DIR_RIGHT;
         end
     end

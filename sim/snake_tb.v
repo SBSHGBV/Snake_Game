@@ -29,6 +29,10 @@ module snake_tb;
     wire [7:0] SEGMENT;
     wire [7:0] LED;
     integer tb_i;
+    integer orbit_i;
+    integer orbit_j;
+    integer orbit_dx;
+    integer orbit_dy;
 
     //----------------------------------------------------------------------
     // Instantiate DUT; override game_tick for fast sim
@@ -54,9 +58,6 @@ module snake_tb;
     // Override the game tick divider in clk_div
     // Simulation: 100 cycles = 1us per game tick
     defparam u_dut.u_clkdiv.GAME_TICK_DIV = 25'd99;
-
-    // Override dead timer: ~10us instead of ~2s
-    defparam u_dut.u_game.DEAD_TIME = 28'd999;
 
     // Accelerate debounce sampling for simulation.
     defparam u_dut.u_db0.SAMPLE_MAX = 17'd9;
@@ -275,20 +276,31 @@ module snake_tb;
         #10_000;
         $display("[%0t] Snake should now be moving UP", $time);
 
-        // Test 5: Let snake hit top wall and die
+        // Test 5: Let snake hit top wall and stay on GAME OVER until confirmed
         // Snake started at y=15, moved up for several ticks, then hits the wall.
         $display("[%0t] Waiting for snake to hit wall...", $time);
         #100_000;  // wait for wall collision
-        if (u_dut.menu_active !== 1'b1) begin
-            $display("[%0t] ERROR: game did not return to menu after death", $time);
+        if (u_dut.game_over !== 1'b1 || u_dut.menu_active !== 1'b0) begin
+            $display("[%0t] ERROR: game did not stay on game-over screen after death", $time);
             $finish;
         end
-        $display("[%0t] Snake died and returned to menu", $time);
+        $display("[%0t] Snake died and GAME OVER is visible", $time);
 
-        // Test 6: Wait for auto-restart (~10us in sim, ~2s in hardware)
-        // DEAD_TIME overridden to 999 cycles, about 10us.
+        // Test 6: GAME OVER waits for confirmation before returning to menu.
         #50_000;
-        $display("[%0t] Pressing START from menu after auto-return...", $time);
+        if (u_dut.game_over !== 1'b1 || u_dut.menu_active !== 1'b0) begin
+            $display("[%0t] ERROR: game-over screen returned to menu without confirmation", $time);
+            $finish;
+        end
+        $display("[%0t] Pressing START to acknowledge GAME OVER...", $time);
+        start_press();
+        #1_000;
+        if (u_dut.menu_active !== 1'b1 || u_dut.game_over !== 1'b0) begin
+            $display("[%0t] ERROR: START did not acknowledge game-over screen", $time);
+            $finish;
+        end
+
+        $display("[%0t] Pressing START from menu after game-over confirm...", $time);
         start_press();
         #10_000;
         if (u_dut.menu_active !== 1'b0) begin
@@ -305,6 +317,7 @@ module snake_tb;
         u_dut.u_game.collision_flag = 1'b0;
         u_dut.u_game.difficulty_reg = 2'd2; // hard: move every tick
         u_dut.u_game.move_div_cnt = 3'd0;
+        u_dut.u_game.current_dir = 2'd0;    // DIR_UP
         u_dut.u_game.next_dir = 2'd0;       // DIR_UP
         u_dut.u_game.food_valid = 1'b0;
         for (tb_i = 0; tb_i < 1200; tb_i = tb_i + 1)
@@ -336,6 +349,65 @@ module snake_tb;
         end
         release u_dut.game_tick;
         $display("[%0t] Tail-follow grid retention passed", $time);
+
+        $display("[%0t] Checking queued direction keeps last valid input...", $time);
+        force u_dut.game_tick = 1'b0;
+        u_dut.u_game.state = 2'd1;          // S_PLAYING
+        u_dut.u_game.collision_flag = 1'b0;
+        u_dut.u_game.difficulty_reg = 2'd2; // hard: move every tick
+        u_dut.u_game.move_div_cnt = 3'd0;
+        u_dut.u_game.current_dir = 2'd0;    // DIR_UP
+        u_dut.u_game.next_dir = 2'd0;       // DIR_UP
+        u_dut.u_game.food_valid = 1'b0;
+        for (tb_i = 0; tb_i < 1200; tb_i = tb_i + 1)
+            u_dut.u_game.grid_reg[tb_i] = 1'b0;
+        u_dut.u_game.grid_reg[17*40 + 20] = 1'b1; // tail
+        u_dut.u_game.grid_reg[16*40 + 20] = 1'b1; // neck
+        u_dut.u_game.grid_reg[15*40 + 20] = 1'b1; // head
+        u_dut.u_game.snake_x[0] = 6'd20; u_dut.u_game.snake_y[0] = 5'd17;
+        u_dut.u_game.snake_x[1] = 6'd20; u_dut.u_game.snake_y[1] = 5'd16;
+        u_dut.u_game.snake_x[2] = 6'd20; u_dut.u_game.snake_y[2] = 5'd15;
+        u_dut.u_game.head_idx = 8'd3;
+        u_dut.u_game.tail_idx = 8'd0;
+        u_dut.u_game.snake_len = 9'd3;
+        u_dut.u_game.head_x_reg = 6'd20;
+        u_dut.u_game.head_y_reg = 5'd15;
+        btn_press(4'b1000);  // queue RIGHT
+        btn_press(4'b0010);  // DOWN is invalid before the queued RIGHT move
+        if (u_dut.u_game.next_dir !== 2'd3) begin
+            $display("[%0t] ERROR: invalid second turn replaced the queued RIGHT input", $time);
+            $finish;
+        end
+        force u_dut.game_tick = 1'b1;
+        @(posedge clk);
+        #1;
+        force u_dut.game_tick = 1'b0;
+        if (u_dut.u_game.collision_flag !== 1'b0 ||
+            u_dut.u_game.head_x !== 6'd21 ||
+            u_dut.u_game.head_y !== 5'd15) begin
+            $display("[%0t] ERROR: queued RIGHT turn did not survive invalid DOWN input", $time);
+            $finish;
+        end
+        release u_dut.game_tick;
+        $display("[%0t] Queued direction retention passed", $time);
+
+        $display("[%0t] Checking title snake orbit continuity...", $time);
+        for (orbit_i = 0; orbit_i < 62; orbit_i = orbit_i + 1) begin
+            orbit_j = (orbit_i == 61) ? 0 : (orbit_i + 1);
+            orbit_dx = u_dut.u_render.orbit_path_x(orbit_i[5:0]) -
+                       u_dut.u_render.orbit_path_x(orbit_j[5:0]);
+            orbit_dy = u_dut.u_render.orbit_path_y(orbit_i[5:0]) -
+                       u_dut.u_render.orbit_path_y(orbit_j[5:0]);
+            if (orbit_dx < 0)
+                orbit_dx = -orbit_dx;
+            if (orbit_dy < 0)
+                orbit_dy = -orbit_dy;
+            if ((orbit_dx + orbit_dy) != 1) begin
+                $display("[%0t] ERROR: title snake orbit gap at %0d -> %0d", $time, orbit_i, orbit_j);
+                $finish;
+            end
+        end
+        $display("[%0t] Title snake orbit continuity passed", $time);
 
         $display("=== Snake Game Testbench Complete ===");
         $display("Smoke checks passed; inspect waveform for score and direction details.");
