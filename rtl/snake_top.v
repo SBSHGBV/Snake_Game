@@ -231,6 +231,6 @@ module snake_top (
     assign LED[4] = difficulty[0];    // difficulty indicator
     assign LED[5] = difficulty[1];    // difficulty indicator
     assign LED[6] = |score;           // any score
-    assign LED[7] = game_tick;        // tick strobe
+    assign LED[7] = buzzer;           // buzzer output (for debug: LED flickers if music works)
 
 endmodule
