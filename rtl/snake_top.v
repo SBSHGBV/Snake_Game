@@ -1,6 +1,6 @@
 //============================================================================
 // snake_top.v - Snake Game Top-Level Module (Kintex-7)
-//   Reset opens the start menu. R/BTNX4 opens restart confirmation while playing.
+//   Reset opens the start menu. Esc opens the pause menu while playing.
 //   Control: BTN[3:0] buttons + PS/2 keyboard (arrow keys / WASD)
 //============================================================================
 `timescale 1ns / 1ps
@@ -9,7 +9,7 @@ module snake_top (
     input  wire        clk,
     input  wire        rstn,         // external reset (active low, with PULLUP)
     input  wire [3:0]  BTN,          // direction: up/down/left/right
-    input  wire        BTNX4,        // start / confirm / restart request
+    input  wire        BTNX4,        // start / select
     input  wire        ps2_clk,      // PS/2 keyboard clock
     input  wire        ps2_data,     // PS/2 keyboard data
     output wire [3:0]  r, g, b,      // VGA 4:4:4
@@ -61,9 +61,9 @@ module snake_top (
     debounce u_dbs (.clk(clk), .rst(rst), .btn_in(~BTNX4),  .btn_press(btn_start),.btn_release(nc_rel));
 
     //----------------------------------------------------------------------
-    // PS/2 Keyboard controller (arrow keys + WASD + Enter/Space/R)
+    // PS/2 Keyboard controller (arrow keys + WASD + Enter/Space/Esc)
     //----------------------------------------------------------------------
-    wire kb_up, kb_down, kb_left, kb_right, kb_start, kb_restart;
+    wire kb_up, kb_down, kb_left, kb_right, kb_start, kb_pause;
 
     ps2_keyboard u_kb (
         .clk       (clk),
@@ -75,7 +75,7 @@ module snake_top (
         .btn_left  (kb_left),
         .btn_right (kb_right),
         .btn_start (kb_start),
-        .btn_restart(kb_restart)
+        .btn_pause (kb_pause)
     );
 
     // Merge keyboard + button inputs (either source works)
@@ -84,7 +84,7 @@ module snake_top (
     wire dir_left  = btn_left  || kb_left;
     wire dir_right = btn_right || kb_right;
     wire start_sig = btn_start || kb_start;
-    wire restart_sig;
+    wire pause_sig = kb_pause;
 
     //----------------------------------------------------------------------
     // LFSR
@@ -105,8 +105,8 @@ module snake_top (
     wire [15:0]   score;
     wire          game_over;
     wire          menu_active;
-    wire          confirm_active;
-    wire          confirm_select;
+    wire          pause_active;
+    wire [1:0]    pause_select;
     wire [1:0]    difficulty;
     wire [15:0]   high_score_easy;
     wire [15:0]   high_score_normal;
@@ -117,8 +117,6 @@ module snake_top (
     wire [5:0]    head_x;
     wire [4:0]    head_y;
 
-    assign restart_sig = kb_restart || (btn_start && !menu_active && !confirm_active);
-
     snake_game u_game (
         .clk             (clk),
         .rst             (rst),
@@ -128,13 +126,13 @@ module snake_top (
         .btn_left        (dir_left),
         .btn_right       (dir_right),
         .btn_start       (start_sig),
-        .btn_restart     (restart_sig),
+        .btn_pause       (pause_sig),
         .lfsr_val        (lfsr_val),
         .score           (score),
         .game_over       (game_over),
         .menu_active     (menu_active),
-        .confirm_active  (confirm_active),
-        .confirm_select  (confirm_select),
+        .pause_active    (pause_active),
+        .pause_select    (pause_select),
         .difficulty      (difficulty),
         .high_score_easy (high_score_easy),
         .high_score_normal(high_score_normal),
@@ -175,8 +173,8 @@ module snake_top (
         .pixel_y         (pixel_y),
         .game_over       (game_over),
         .menu_active     (menu_active),
-        .confirm_active  (confirm_active),
-        .confirm_select  (confirm_select),
+        .pause_active    (pause_active),
+        .pause_select    (pause_select),
         .difficulty      (difficulty),
         .score           (score),
         .high_score_easy (high_score_easy),

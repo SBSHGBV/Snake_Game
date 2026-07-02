@@ -183,53 +183,70 @@ module snake_tb;
 
         // Freeze movement while sending slow PS/2 scan codes. The core still
         // sees keyboard pulses, but the accelerated snake cannot hit a wall
-        // before the full R/Enter sequence is received.
+        // before the full pause-menu sequence is received.
         force u_dut.game_tick = 1'b0;
 
-        $display("[%0t] Pressing R to open restart confirmation...", $time);
+        $display("[%0t] Pressing R (should no longer open a menu)...", $time);
         ps2_send_byte(8'h2D);
         #1_000;
-        if (u_dut.confirm_active !== 1'b1 || u_dut.confirm_select !== 1'b0) begin
-            $display("[%0t] ERROR: R did not open restart confirmation on CANCEL", $time);
+        if (u_dut.pause_active !== 1'b0 || u_dut.menu_active !== 1'b0) begin
+            $display("[%0t] ERROR: R still opened a game menu", $time);
             $finish;
         end
 
-        $display("[%0t] Pressing ENTER to cancel restart...", $time);
+        $display("[%0t] Pressing ESC to open pause menu...", $time);
+        ps2_send_byte(8'h76);
+        #1_000;
+        if (u_dut.pause_active !== 1'b1 || u_dut.pause_select !== 2'd1) begin
+            $display("[%0t] ERROR: ESC did not open pause menu on CANCEL", $time);
+            $finish;
+        end
+
+        $display("[%0t] Pressing ENTER to cancel pause menu...", $time);
         ps2_send_byte(8'h5A);
         #1_000;
-        if (u_dut.confirm_active !== 1'b0 || u_dut.menu_active !== 1'b0) begin
-            $display("[%0t] ERROR: restart cancel did not return to game", $time);
+        if (u_dut.pause_active !== 1'b0 || u_dut.menu_active !== 1'b0) begin
+            $display("[%0t] ERROR: pause cancel did not return to game", $time);
             $finish;
         end
 
-        $display("[%0t] Pressing R and confirming restart...", $time);
-        ps2_send_byte(8'h2D);
+        $display("[%0t] Pressing ESC and choosing RESTART...", $time);
+        ps2_send_byte(8'h76);
+        ps2_send_byte(8'hE0);
+        ps2_send_byte(8'h6B);
+        #1_000;
+        if (u_dut.pause_active !== 1'b1 || u_dut.pause_select !== 2'd0) begin
+            $display("[%0t] ERROR: pause menu did not select RESTART", $time);
+            $finish;
+        end
+        ps2_send_byte(8'h5A);
+        #1_000;
+        if (u_dut.pause_active !== 1'b0 || u_dut.menu_active !== 1'b0 || u_dut.score !== 16'd0) begin
+            $display("[%0t] ERROR: pause restart did not reset into gameplay", $time);
+            $finish;
+        end
+
+        $display("[%0t] Pressing ESC and choosing EXIT...", $time);
+        ps2_send_byte(8'h76);
         ps2_send_byte(8'hE0);
         ps2_send_byte(8'h74);
         #1_000;
-        if (u_dut.confirm_active !== 1'b1 || u_dut.confirm_select !== 1'b1) begin
-            $display("[%0t] ERROR: restart confirmation did not select CONFIRM", $time);
+        if (u_dut.pause_active !== 1'b1 || u_dut.pause_select !== 2'd2) begin
+            $display("[%0t] ERROR: pause menu did not select EXIT", $time);
             $finish;
         end
         ps2_send_byte(8'h5A);
         #1_000;
-        if (u_dut.confirm_active !== 1'b0 || u_dut.menu_active !== 1'b0 || u_dut.score !== 16'd0) begin
-            $display("[%0t] ERROR: confirmed restart did not reset into gameplay", $time);
+        if (u_dut.pause_active !== 1'b0 || u_dut.menu_active !== 1'b1) begin
+            $display("[%0t] ERROR: pause exit did not return to title menu", $time);
             $finish;
         end
 
-        $display("[%0t] Pressing BTNX4 to open restart confirmation...", $time);
-        start_press();
+        $display("[%0t] Restarting from title after pause EXIT...", $time);
+        ps2_send_byte(8'h5A);
         #1_000;
-        if (u_dut.confirm_active !== 1'b1 || u_dut.confirm_select !== 1'b0) begin
-            $display("[%0t] ERROR: BTNX4 did not open restart confirmation on CANCEL", $time);
-            $finish;
-        end
-        $display("[%0t] Pressing BTNX4 to cancel restart...", $time);
-        start_press();
-        #1_000;
-        if (u_dut.confirm_active !== 1'b0 || u_dut.menu_active !== 1'b0) begin
-            $display("[%0t] ERROR: BTNX4 restart cancel did not return to game", $time);
+        if (u_dut.menu_active !== 1'b0) begin
+            $display("[%0t] ERROR: ENTER did not restart from title after pause EXIT", $time);
             $finish;
         end
         release u_dut.game_tick;

@@ -15,8 +15,8 @@ module snake_render (
     input  wire [9:0]  pixel_y,            // VGA pixel Y (0-479)
     input  wire        game_over,          // game over flag
     input  wire        menu_active,        // start menu flag
-    input  wire        confirm_active,     // restart confirmation flag
-    input  wire        confirm_select,     // 0=cancel, 1=confirm
+    input  wire        pause_active,       // pause menu flag
+    input  wire [1:0]  pause_select,       // 0=restart, 1=cancel, 2=exit
     input  wire [1:0]  difficulty,         // selected difficulty
     input  wire [15:0] score,              // BCD score
     input  wire [15:0] high_score_easy,    // high scores per difficulty
@@ -99,6 +99,8 @@ module snake_render (
                 "R": case (row) 3'd0: font5x7 = 5'b11110; 3'd1: font5x7 = 5'b10001; 3'd2: font5x7 = 5'b10001; 3'd3: font5x7 = 5'b11110; 3'd4: font5x7 = 5'b10100; 3'd5: font5x7 = 5'b10010; 3'd6: font5x7 = 5'b10001; default: font5x7 = 5'b00000; endcase
                 "S": case (row) 3'd0: font5x7 = 5'b01111; 3'd1: font5x7 = 5'b10000; 3'd2: font5x7 = 5'b10000; 3'd3: font5x7 = 5'b01110; 3'd4: font5x7 = 5'b00001; 3'd5: font5x7 = 5'b00001; 3'd6: font5x7 = 5'b11110; default: font5x7 = 5'b00000; endcase
                 "T": case (row) 3'd0: font5x7 = 5'b11111; 3'd1: font5x7 = 5'b00100; 3'd2: font5x7 = 5'b00100; 3'd3: font5x7 = 5'b00100; 3'd4: font5x7 = 5'b00100; 3'd5: font5x7 = 5'b00100; 3'd6: font5x7 = 5'b00100; default: font5x7 = 5'b00000; endcase
+                "U": case (row) 3'd0: font5x7 = 5'b10001; 3'd1: font5x7 = 5'b10001; 3'd2: font5x7 = 5'b10001; 3'd3: font5x7 = 5'b10001; 3'd4: font5x7 = 5'b10001; 3'd5: font5x7 = 5'b10001; 3'd6: font5x7 = 5'b01110; default: font5x7 = 5'b00000; endcase
+                "X": case (row) 3'd0: font5x7 = 5'b10001; 3'd1: font5x7 = 5'b10001; 3'd2: font5x7 = 5'b01010; 3'd3: font5x7 = 5'b00100; 3'd4: font5x7 = 5'b01010; 3'd5: font5x7 = 5'b10001; 3'd6: font5x7 = 5'b10001; default: font5x7 = 5'b00000; endcase
                 "Y": case (row) 3'd0: font5x7 = 5'b10001; 3'd1: font5x7 = 5'b10001; 3'd2: font5x7 = 5'b01010; 3'd3: font5x7 = 5'b00100; 3'd4: font5x7 = 5'b00100; 3'd5: font5x7 = 5'b00100; 3'd6: font5x7 = 5'b00100; default: font5x7 = 5'b00000; endcase
                 "!": case (row) 3'd0: font5x7 = 5'b00100; 3'd1: font5x7 = 5'b00100; 3'd2: font5x7 = 5'b00100; 3'd3: font5x7 = 5'b00100; 3'd4: font5x7 = 5'b00100; 3'd5: font5x7 = 5'b00000; 3'd6: font5x7 = 5'b00100; default: font5x7 = 5'b00000; endcase
                 ">": case (row) 3'd0: font5x7 = 5'b10000; 3'd1: font5x7 = 5'b01000; 3'd2: font5x7 = 5'b00100; 3'd3: font5x7 = 5'b00010; 3'd4: font5x7 = 5'b00100; 3'd5: font5x7 = 5'b01000; 3'd6: font5x7 = 5'b10000; default: font5x7 = 5'b00000; endcase
@@ -195,18 +197,16 @@ module snake_render (
         end
     endfunction
 
-    function [7:0] confirm_char;
+    function [7:0] pause_title_char;
         input [2:0] idx;
         begin
             case (idx)
-                3'd0: confirm_char = "C";
-                3'd1: confirm_char = "O";
-                3'd2: confirm_char = "N";
-                3'd3: confirm_char = "F";
-                3'd4: confirm_char = "I";
-                3'd5: confirm_char = "R";
-                3'd6: confirm_char = "M";
-                default: confirm_char = " ";
+                3'd0: pause_title_char = "P";
+                3'd1: pause_title_char = "A";
+                3'd2: pause_title_char = "U";
+                3'd3: pause_title_char = "S";
+                3'd4: pause_title_char = "E";
+                default: pause_title_char = " ";
             endcase
         end
     endfunction
@@ -222,6 +222,19 @@ module snake_render (
                 3'd4: cancel_char = "E";
                 3'd5: cancel_char = "L";
                 default: cancel_char = " ";
+            endcase
+        end
+    endfunction
+
+    function [7:0] exit_char;
+        input [2:0] idx;
+        begin
+            case (idx)
+                3'd0: exit_char = "E";
+                3'd1: exit_char = "X";
+                3'd2: exit_char = "I";
+                3'd3: exit_char = "T";
+                default: exit_char = " ";
             endcase
         end
     endfunction
@@ -353,7 +366,7 @@ module snake_render (
                        font_pixel(start_char(start_col), start_font_y, start_in_char_x[2:0]);
 
     // Orbiting decorative snake near the title, using the in-game 16x16 cell style.
-    wire [5:0] orbit_idx_raw = anim_cnt[26:21];
+    wire [5:0] orbit_idx_raw = anim_cnt[25:20];
     wire [5:0] orbit_idx = (orbit_idx_raw == 6'd63) ? 6'd0 : orbit_idx_raw;
     wire [5:0] orbit_idx1 = orbit_prev(orbit_idx, 3'd1);
     wire [5:0] orbit_idx2 = orbit_prev(orbit_idx, 3'd2);
@@ -379,43 +392,58 @@ module snake_render (
     wire game_score_pixel = game_score_area &&
                             font_pixel(score_char(game_score_col, score), game_score_font_y, game_score_in_char_x[2:0]);
 
-    // Restart confirmation overlay.
-    wire confirm_title_area = (pixel_x >= 10'd208) && (pixel_x < 10'd432) &&
-                              (pixel_y >= 10'd176) && (pixel_y < 10'd204);
-    wire [7:0] confirm_title_lx = pixel_x - 10'd208;
-    wire [4:0] confirm_title_ly = pixel_y - 10'd176;
-    wire [2:0] confirm_title_col = confirm_title_lx[7:5];
-    wire [5:0] confirm_title_in_char_x = {3'd0, confirm_title_lx[4:2]};
-    wire [2:0] confirm_title_font_y = confirm_title_ly[4:2];
-    wire confirm_title_pixel = confirm_title_area &&
-                               font_pixel(restart_char(confirm_title_col), confirm_title_font_y, confirm_title_in_char_x[2:0]);
+    // Pause menu overlay.
+    wire pause_title_area = (pixel_x >= 10'd240) && (pixel_x < 10'd400) &&
+                            (pixel_y >= 10'd152) && (pixel_y < 10'd180);
+    wire [7:0] pause_title_lx = pixel_x - 10'd240;
+    wire [4:0] pause_title_ly = pixel_y - 10'd152;
+    wire [2:0] pause_title_col = pause_title_lx[7:5];
+    wire [5:0] pause_title_in_char_x = {3'd0, pause_title_lx[4:2]};
+    wire [2:0] pause_title_font_y = pause_title_ly[4:2];
+    wire pause_title_pixel = pause_title_area &&
+                             font_pixel(pause_title_char(pause_title_col), pause_title_font_y, pause_title_in_char_x[2:0]);
 
-    wire confirm_option_area = (pixel_x >= 10'd88) && (pixel_x < 10'd344) &&
-                               (pixel_y >= 10'd272) && (pixel_y < 10'd304);
-    wire cancel_option_area = (pixel_x >= 10'd360) && (pixel_x < 10'd584) &&
-                              (pixel_y >= 10'd272) && (pixel_y < 10'd304);
+    wire restart_option_area = (pixel_x >= 10'd204) && (pixel_x < 10'd436) &&
+                               (pixel_y >= 10'd220) && (pixel_y < 10'd252);
+    wire cancel_option_area = (pixel_x >= 10'd220) && (pixel_x < 10'd420) &&
+                              (pixel_y >= 10'd276) && (pixel_y < 10'd308);
+    wire exit_option_area = (pixel_x >= 10'd252) && (pixel_x < 10'd388) &&
+                            (pixel_y >= 10'd332) && (pixel_y < 10'd364);
 
-    wire [8:0] confirm_lx = pixel_x - 10'd104;
-    wire [4:0] confirm_ly = pixel_y - 10'd274;
-    wire [2:0] confirm_col = confirm_lx[7:5];
-    wire [5:0] confirm_in_char_x = {3'd0, confirm_lx[4:2]};
-    wire [2:0] confirm_font_y = confirm_ly[4:2];
-    wire confirm_text_pixel = confirm_option_area &&
-                              font_pixel(confirm_char(confirm_col), confirm_font_y, confirm_in_char_x[2:0]);
+    wire [7:0] restart_lx = pixel_x - 10'd208;
+    wire [4:0] restart_ly = pixel_y - 10'd222;
+    wire [2:0] restart_col = restart_lx[7:5];
+    wire [5:0] restart_in_char_x = {3'd0, restart_lx[4:2]};
+    wire [2:0] restart_font_y = restart_ly[4:2];
+    wire restart_text_pixel = restart_option_area &&
+                              font_pixel(restart_char(restart_col), restart_font_y, restart_in_char_x[2:0]);
 
-    wire [7:0] cancel_lx = pixel_x - 10'd376;
-    wire [4:0] cancel_ly = pixel_y - 10'd274;
+    wire [7:0] cancel_lx = pixel_x - 10'd224;
+    wire [4:0] cancel_ly = pixel_y - 10'd278;
     wire [2:0] cancel_col = cancel_lx[7:5];
     wire [5:0] cancel_in_char_x = {3'd0, cancel_lx[4:2]};
     wire [2:0] cancel_font_y = cancel_ly[4:2];
     wire cancel_text_pixel = cancel_option_area &&
                              font_pixel(cancel_char(cancel_col), cancel_font_y, cancel_in_char_x[2:0]);
 
-    wire confirm_selected_area = confirm_select ? confirm_option_area : cancel_option_area;
-    wire confirm_border_pixel = confirm_active && confirm_selected_area &&
-                                ((pixel_y < 10'd276) || (pixel_y >= 10'd300) ||
-                                 (confirm_select && ((pixel_x < 10'd92) || (pixel_x >= 10'd340))) ||
-                                 (!confirm_select && ((pixel_x < 10'd364) || (pixel_x >= 10'd580))));
+    wire [7:0] exit_lx = pixel_x - 10'd256;
+    wire [4:0] exit_ly = pixel_y - 10'd334;
+    wire [2:0] exit_col = exit_lx[7:5];
+    wire [5:0] exit_in_char_x = {3'd0, exit_lx[4:2]};
+    wire [2:0] exit_font_y = exit_ly[4:2];
+    wire exit_text_pixel = exit_option_area &&
+                           font_pixel(exit_char(exit_col), exit_font_y, exit_in_char_x[2:0]);
+
+    wire restart_border_pixel = pause_active && (pause_select == 2'd0) && restart_option_area &&
+                                ((pixel_y < 10'd224) || (pixel_y >= 10'd248) ||
+                                 (pixel_x < 10'd208) || (pixel_x >= 10'd432));
+    wire cancel_border_pixel = pause_active && (pause_select == 2'd1) && cancel_option_area &&
+                               ((pixel_y < 10'd280) || (pixel_y >= 10'd304) ||
+                                (pixel_x < 10'd224) || (pixel_x >= 10'd416));
+    wire exit_border_pixel = pause_active && (pause_select == 2'd2) && exit_option_area &&
+                             ((pixel_y < 10'd336) || (pixel_y >= 10'd360) ||
+                              (pixel_x < 10'd256) || (pixel_x >= 10'd384));
+    wire pause_border_pixel = restart_border_pixel || cancel_border_pixel || exit_border_pixel;
 
     //----------------------------------------------------------------------
     // Color generation (registered output on vga_ce)
@@ -458,19 +486,25 @@ module snake_render (
                 else
                     {vga_r, vga_g, vga_b} <= {4'd0, 4'd3, 4'd4};
             end
-            else if (confirm_active) begin
-                if (confirm_title_pixel)
+            else if (pause_active) begin
+                if (pause_title_pixel)
                     {vga_r, vga_g, vga_b} <= {4'd15, 4'd15, 4'd2};
-                else if (confirm_border_pixel)
+                else if (pause_border_pixel)
                     {vga_r, vga_g, vga_b} <= {4'd4, 4'd12, 4'd15};
-                else if (confirm_text_pixel) begin
-                    if (confirm_select)
+                else if (restart_text_pixel) begin
+                    if (pause_select == 2'd0)
                         {vga_r, vga_g, vga_b} <= {4'd8, 4'd15, 4'd9};
                     else
                         {vga_r, vga_g, vga_b} <= {4'd8, 4'd8, 4'd8};
                 end
                 else if (cancel_text_pixel) begin
-                    if (!confirm_select)
+                    if (pause_select == 2'd1)
+                        {vga_r, vga_g, vga_b} <= {4'd8, 4'd15, 4'd9};
+                    else
+                        {vga_r, vga_g, vga_b} <= {4'd8, 4'd8, 4'd8};
+                end
+                else if (exit_text_pixel) begin
+                    if (pause_select == 2'd2)
                         {vga_r, vga_g, vga_b} <= {4'd8, 4'd15, 4'd9};
                     else
                         {vga_r, vga_g, vga_b} <= {4'd8, 4'd8, 4'd8};

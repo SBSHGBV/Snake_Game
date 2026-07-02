@@ -7,7 +7,7 @@
 //     Down:  E0 72                     A: 1C
 //     Left:  E0 6B                     S: 1B
 //     Right: E0 74                     D: 23
-//   Start / confirm: Enter(5A) or Space(29); restart request: R(2D)
+//   Start / select: Enter(5A) or Space(29); pause menu: Esc(76)
 //============================================================================
 `timescale 1ns / 1ps
 
@@ -21,7 +21,7 @@ module ps2_keyboard (
     output reg        btn_left,
     output reg        btn_right,
     output reg        btn_start,
-    output reg        btn_restart
+    output reg        btn_pause
 );
 
     //----------------------------------------------------------------------
@@ -141,7 +141,7 @@ module ps2_keyboard (
             btn_left  <= 1'b0;
             btn_right <= 1'b0;
             btn_start <= 1'b0;
-            btn_restart <= 1'b0;
+            btn_pause <= 1'b0;
         end
         else begin
             // Default: all low (pulse for one cycle only)
@@ -150,7 +150,7 @@ module ps2_keyboard (
             btn_left  <= 1'b0;
             btn_right <= 1'b0;
             btn_start <= 1'b0;
-            btn_restart <= 1'b0;
+            btn_pause <= 1'b0;
 
             if (make_code_valid) begin
                 if (e0_flag) begin
@@ -172,7 +172,7 @@ module ps2_keyboard (
                         8'h23: btn_right <= 1'b1;   // D
                         8'h5A: btn_start <= 1'b1;   // Enter
                         8'h29: btn_start <= 1'b1;   // Space
-                        8'h2D: btn_restart <= 1'b1; // R (restart)
+                        8'h76: btn_pause <= 1'b1;   // Esc (pause menu)
                         default: ;
                     endcase
                 end
