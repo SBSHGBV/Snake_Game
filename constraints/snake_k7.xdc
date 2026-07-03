@@ -110,7 +110,7 @@ set_property IOSTANDARD LVCMOS33 [get_ports {LED[7]}]
 
 #---- Buzzer (piezo speaker) ----
 # TODO: assign the correct pin for your board's buzzer
-set_property PACKAGE_PIN T19  [get_ports buzzer]
+set_property PACKAGE_PIN AF25  [get_ports buzzer]
 set_property IOSTANDARD LVCMOS33 [get_ports buzzer]
 set_property SLEW FAST [get_ports buzzer]
 

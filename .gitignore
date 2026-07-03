@@ -1,1 +1,4 @@
 /snake/
+/.tmp_pdf/
+*.vcd
+*.vvp
